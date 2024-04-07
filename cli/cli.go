@@ -2,8 +2,10 @@ package cli
 
 import (
 	"Blockchain_Project/account"
+	"Blockchain_Project/transaction"
 	"flag"
 	"fmt"
+	"math/big"
 	"os"
 )
 
@@ -50,4 +52,20 @@ func (cli *Client) Run() {
 	fmt.Println(newAccount.Address)
 	fmt.Println(newAccount.Nonce)
 	fmt.Println(newAccount.Balance)
+
+	
+	new_transaction := &transaction.Transaction{
+		To:    newAccount.Address,
+		Value: 100,
+		Nonce: newAccount.Nonce,
+		V:    big.NewInt(27),
+		R:    big.NewInt(27),
+		S:    big.NewInt(27),
+	}
+	
+	transaction.AddToPool(*new_transaction)
+	fmt.Println(transaction.GetPool())
+
+
+
 }
