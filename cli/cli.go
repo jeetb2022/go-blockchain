@@ -50,4 +50,5 @@ func (cli *Client) Run() {
 	fmt.Println(newAccount.Address)
 	fmt.Println(newAccount.Nonce)
 	fmt.Println(newAccount.Balance)
+	
 }
