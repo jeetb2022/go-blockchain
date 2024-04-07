@@ -58,7 +58,9 @@ func GetCompleteBlocksDBData() ([][]byte, error) {
     defer iter.Release()
 
     for iter.Next() {
-        datArray = append(datArray, iter.Value())
+        data := make([]byte, len(iter.Value()))
+        copy(data, iter.Value())
+        datArray = append(datArray, data)
     }
 
     if err := iter.Error(); err != nil {
