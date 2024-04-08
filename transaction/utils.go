@@ -9,9 +9,8 @@ import (
 )
 
 // SignTransaction signs a transaction using the private key of the sender
-func SignTransaction(privateKey *ecdsa.PrivateKey, from [20]byte, to [20]byte, value, nonce uint64) (*Transaction, error) {
+func SignTransaction(privateKey *ecdsa.PrivateKey, to [20]byte, value, nonce uint64) (*Transaction, error) {
 	transaction := Transaction{
-		From:  from,
 		To:    to,
 		Value: value,
 		Nonce: nonce,
@@ -26,7 +25,6 @@ func SignTransaction(privateKey *ecdsa.PrivateKey, from [20]byte, to [20]byte, v
 	}
 
 	return &Transaction{
-		From:  from,
 		To:    to,
 		Value: value,
 		Nonce: nonce,

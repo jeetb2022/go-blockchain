@@ -27,7 +27,7 @@ func TestSignTransaction(t *testing.T) {
 	fmt.Println("Set recipient's address")
 
 	// Create and sign the transaction
-	signedTransaction, err := SignTransaction(privateKey, from, to, 100, 0)
+	signedTransaction, err := SignTransaction(privateKey, to, 100, 0)
 	if err != nil {
 		t.Errorf("Error signing transaction: %v", err)
 		return
