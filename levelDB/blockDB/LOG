@@ -1,0 +1,32 @@
+=============== Apr 29, 2024 (IST) ===============
+12:16:19.193979 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:16:19.198712 db@open opening
+12:16:19.201673 version@stat F·[] S·0B[] Sc·[]
+12:16:19.203335 db@janitor F·2 G·0
+12:16:19.203335 db@open done T·4.6225ms
+12:16:19.219043 db@close closing
+12:16:19.219341 db@close done T·298.1µs
+=============== Apr 29, 2024 (IST) ===============
+12:16:30.480127 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:16:30.481864 version@stat F·[] S·0B[] Sc·[]
+12:16:30.481864 db@open opening
+12:16:30.481864 journal@recovery F·1
+12:16:30.484976 journal@recovery recovering @1
+12:16:30.488029 memdb@flush created L0@2 N·1 S·153B "\x00\x00\x00\x00,v1":"\x00\x00\x00\x00,v1"
+12:16:30.489154 version@stat F·[1] S·153B[153B] Sc·[0.25]
+12:16:30.492987 db@janitor F·3 G·0
+12:16:30.492987 db@open done T·11.1231ms
+12:16:30.519294 db@close closing
+12:16:30.519294 db@close done T·0s
+=============== Apr 29, 2024 (IST) ===============
+12:17:08.517405 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:17:08.518970 version@stat F·[1] S·153B[153B] Sc·[0.25]
+12:17:08.518970 db@open opening
+12:17:08.519082 journal@recovery F·1
+12:17:08.520173 journal@recovery recovering @3
+12:17:08.523075 memdb@flush created L0@5 N·1 S·152B "\x00\x00\x00\x01,v3":"\x00\x00\x00\x01,v3"
+12:17:08.523075 version@stat F·[2] S·305B[305B] Sc·[0.50]
+12:17:08.526877 db@janitor F·4 G·0
+12:17:08.527436 db@open done T·8.4656ms
+12:17:08.551640 db@close closing
+12:17:08.551640 db@close done T·0s
