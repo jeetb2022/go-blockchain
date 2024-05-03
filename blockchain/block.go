@@ -2,13 +2,24 @@ package block
 
 import (
 	"Blockchain_Project/transaction"
-	"Blockchain_Project/utils"
 	"crypto/sha256"
+	"fmt"
+	// "sync"
+
+	"github.com/ethereum/go-ethereum/rlp"
+	// "golang.org/x/crypto/sha3"
+
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/crypto"
 )
 
 // CalculateHash calculates the hash of the block header
 func (b *Block) CalculateHash() [32]byte {
-	headerBytes := utils.Serialize(b.Header)
+	headerBytes, err := rlp.EncodeToBytes(b.Header)
+	if err != nil {
+		fmt.Println("Error encoding block header to bytes")
+		return [32]byte{}
+	}
 	hash := sha256.Sum256(headerBytes)
 	return hash
 }

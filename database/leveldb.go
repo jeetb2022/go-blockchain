@@ -6,6 +6,8 @@ import (
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
     "encoding/binary"
+    "github.com/ethereum/go-ethereum/rlp"
+    "Blockchain_Project/account"
 )
 
 var (
@@ -81,6 +83,46 @@ func AddBlockData(blockData []byte) error {
     return nil
 }
 
+// ------------------------ Functios related to transactionDB (Cluster 1) ------------------------
+
+func AddAccountToDB(address [20]byte, account *account.Account) error {
+    // Serialize the account object
+    serializedAccount, err := rlp.EncodeToBytes(account)
+    if err != nil {
+        return fmt.Errorf("error serializing account: %v", err)
+    }
+
+    // Convert the address to a byte slice
+    addressBytes := address[:]
+
+    // Add the serialized account data to the account database
+    err = accountDB.Put(addressBytes, serializedAccount, nil)
+    if err != nil {
+        return fmt.Errorf("error adding account to database: %v", err)
+    }
+
+    fmt.Println("Account added successfully:", address)
+    return nil
+}
+
+func GetAccountFromDB(address [20]byte) (*account.Account, error) {
+    addressBytes := address[:]
+
+    serializedAccount, err := accountDB.Get(addressBytes, nil)
+    if err != nil {
+        return nil, fmt.Errorf("error retrieving account from database: %v", err)
+    }
+
+    // Deserialize the account data
+    var account account.Account
+    err = rlp.DecodeBytes(serializedAccount, &account)
+    if err != nil {
+        return nil, fmt.Errorf("error deserializing account: %v", err)
+    }
+
+    fmt.Println("Account retrieved successfully:", address)
+    return &account, nil
+}
 
 // ------------------------ Functios related to transactionDB (Cluster 2) ------------------------
 

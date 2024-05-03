@@ -25,7 +25,6 @@ func (bc *Blockchain) AddBlock(newBlock *Block) error {
 func (bc *Blockchain) verifyBlock(newBlock *Block) bool {
 	// Check if the blockchain is empty
 	if len(bc.Blocks) == 0 {
-		// For the first block, no verification is needed
 		return true
 	}
 	// Get the hash of the last block in the chain
@@ -33,9 +32,5 @@ func (bc *Blockchain) verifyBlock(newBlock *Block) bool {
 	lastBlockHash := lastBlock.CalculateHash()
 
 	// Verify that the parent hash of the new block matches the hash of the last block
-	if newBlock.Header.ParentHash != lastBlockHash {
-		return false
-	}
-
-	return true
+	return newBlock.Header.ParentHash == lastBlockHash 
 }
