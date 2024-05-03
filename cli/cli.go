@@ -1,54 +1,87 @@
 package cli
 
 import (
+	// "Blockchain_Project/account"
+
 	"Blockchain_Project/account"
+	"Blockchain_Project/network"
+	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
+	"strings"
 )
 
 type Client struct{}
 
 func (cli *Client) validateArgs() {
 	fmt.Println(os.Args)
-	// if len(os.Args) < 2 {
-	// 	cli.printUsage()
-	// 	runtime.Goexit()
-	// }
+	if len(os.Args) < 2 {
+		cli.printUsage()
+		runtime.Goexit()
+	}
 }
 
 func (cli *Client) printUsage() {
+	fmt.Println("Usage:")
+	fmt.Println("go run ./main.go initiatenode -mineraddr <HEX_ADDRESS> ")
 
+}
+
+func convertToAddr(mineraddr string) ([20]byte, error) {
+	var address [20]byte
+
+	// Ensure the hexadecimal address string starts with "0x"
+	if !strings.HasPrefix(mineraddr, "0x") {
+		return address, fmt.Errorf("invalid hexadecimal address: must start with '0x'")
+	}
+
+	// Trim the "0x" prefix
+	hexAddr := mineraddr[2:]
+
+	// Decode the hexadecimal string into bytes
+	addrBytes, err := hex.DecodeString(hexAddr)
+	if err != nil {
+		return address, err
+	}
+
+	// Check if the byte slice has the correct length
+	if len(addrBytes) != 20 {
+		return address, fmt.Errorf("invalid address length: must be 20 bytes long")
+	}
+
+	// Copy the bytes into the address array
+	copy(address[:], addrBytes)
+
+	return address, nil
 }
 
 func (cli *Client) Run() {
 	fmt.Println("Running the CLI command")
+	cli.validateArgs()
+	ctx := context.Background()
 
-	testFlag := flag.NewFlagSet("test2", flag.ExitOnError)
-	testFlagVal := testFlag.String(
-		"test",
-		"",
-		"Enable mining mode and send reward to ADDRESS",
-	)
-	testFlagVal2 := testFlag.String(
-		"test2",
-		"",
-		"Enable mining mode and send reward to ADDRESS",
-	)
-	testFlag.Parse(os.Args[1:])
-	fmt.Println("test flag value :", *testFlagVal2)
-	fmt.Println("test flag value :", *testFlagVal)
-	type Address [20]byte
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	InitiateNodeFlag := flag.NewFlagSet("initializeNode", flag.ContinueOnError)
+	switch os.Args[1] {
+	case "initiatenode":
+		minerAddress := InitiateNodeFlag.String("mineraddr", "", "Send mining rewards to the address ")
+		err := InitiateNodeFlag.Parse(os.Args[2:])
+		if err != nil {
+			cli.printUsage()
+			panic(err)
 
-	newAccount := &account.Account{
-		Address: address,
-		Nonce:   13,
-		Balance: 10000,
+		}
+		addrBytes, err := convertToAddr(*minerAddress)
+		if err != nil {
+			cli.printUsage()
+			panic(err)
+		}
+		account.ValidateAddress(addrBytes)
+		network.Run(ctx)
+	default:
+		cli.printUsage()
+		runtime.Goexit()
 	}
-	fmt.Println((os.Args))
-	fmt.Println(newAccount.Address)
-	fmt.Println(newAccount.Nonce)
-	fmt.Println(newAccount.Balance)
-	
 }
