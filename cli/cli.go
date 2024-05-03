@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Client struct{}
@@ -30,8 +31,8 @@ func (cli *Client) printUsage() {
 
 }
 
-func convertToAddr(mineraddr string) ([20]byte, error) {
-	var address [20]byte
+func convertToAddr(mineraddr string) (common.Address, error) {
+	var address common.Address
 
 	// Ensure the hexadecimal address string starts with "0x"
 	if !strings.HasPrefix(mineraddr, "0x") {
