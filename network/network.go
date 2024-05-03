@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -51,12 +52,20 @@ func sendHelloMessage(ctx context.Context, host host.Host, peerID peer.ID, peerA
 }
 
 func Run(ctx context.Context) {
-
-	priv2, _, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
+	privHex := os.Getenv("HOST_HEX")
+	// Decode hex string to bytes
+	privBytes, err := hex.DecodeString(privHex)
 	if err != nil {
 		panic(err)
 	}
-	host2, err := libp2p.New(libp2p.Identity(priv2), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+
+	// Parse bytes into a private key
+	privKey, err := crypto.UnmarshalEd25519PrivateKey(privBytes)
+	if err != nil {
+		panic(err)
+	}
+	host2, err := libp2p.New(libp2p.Identity(privKey), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+
 	if err != nil {
 		panic(err)
 	}
@@ -108,7 +117,7 @@ func Run(ctx context.Context) {
 		Want: &resCode, // expects a string Hello
 		Data: "Hello",
 	}
-	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA,firstHelloMessage)
+	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA, firstHelloMessage)
 
 	sigCh := make(chan os.Signal)
 	signal.Notify(sigCh, syscall.SIGKILL, syscall.SIGINT)

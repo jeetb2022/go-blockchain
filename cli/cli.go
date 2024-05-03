@@ -59,11 +59,12 @@ func convertToAddr(mineraddr string) ([20]byte, error) {
 }
 
 func (cli *Client) Run() {
+
 	fmt.Println("Running the CLI command")
 	cli.validateArgs()
 	ctx := context.Background()
 
-	InitiateNodeFlag := flag.NewFlagSet("initializeNode", flag.ContinueOnError)
+	InitiateNodeFlag := flag.NewFlagSet("initializeNode", flag.ExitOnError)
 	switch os.Args[1] {
 	case "initiatenode":
 		minerAddress := InitiateNodeFlag.String("mineraddr", "", "Send mining rewards to the address ")
@@ -71,17 +72,22 @@ func (cli *Client) Run() {
 		if err != nil {
 			cli.printUsage()
 			panic(err)
-
 		}
+
 		addrBytes, err := convertToAddr(*minerAddress)
 		if err != nil {
 			cli.printUsage()
 			panic(err)
 		}
-		account.ValidateAddress(addrBytes)
+
+		if !account.ValidateAddress(addrBytes) {
+			fmt.Println("Invalid address")
+			return // Exit early if the address is invalid
+		}
+
+		// If the address is valid, execute network.Run(ctx)
 		network.Run(ctx)
 	default:
 		cli.printUsage()
-		runtime.Goexit()
 	}
 }
