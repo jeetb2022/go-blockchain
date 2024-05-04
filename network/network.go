@@ -80,8 +80,7 @@ func receiveMessage(stream network.Stream) (Message, error) {
 	return msg, nil
 }
 
-func sendHelloMessage(ctx context.Context, host host.Host, peerID peer.ID, peerAddr multiaddr.Multiaddr, helloMessage Message) {
-	fmt.Println("Sending Hello message...")
+func sendMessageWithCTX(ctx context.Context, host host.Host, peerID peer.ID, helloMessage Message) {
 	stream, err := host.NewStream(ctx, peerID, "/Hello")
 	if err != nil {
 		fmt.Println("Error opening stream to peer:", err)
@@ -89,7 +88,6 @@ func sendHelloMessage(ctx context.Context, host host.Host, peerID peer.ID, peerA
 	}
 	defer stream.Close()
 	sendMessage(stream, helloMessage)
-	fmt.Println("Hello message sent successfully.")
 }
 
 func Run(ctx context.Context) {
@@ -127,26 +125,43 @@ func Run(ctx context.Context) {
 	fmt.Println("Connected to", peerAddrInfo.String())
 
 	host2.SetStreamHandler("/Hello", func(s network.Stream) {
-		fmt.Println("Received stream from:", s.Conn().RemotePeer())
+		// fmt.Println("Received stream from:", s.Conn().RemotePeer())
 		msg, err := receiveMessage(s)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Println(string(msg.Data))
+		if msg.Want == uint(1) {
+			SendPONG(ctx, host2, s.Conn().RemotePeer())
+		}
 
 	})
-	// rand.Seed(time.Now().UnixNano())
-	// Send the initial Hello message after setting up the stream handler
-	resCode := uint(1)
-	firstHelloMessage := Message{
-		ID:   rand.Uint64(),
-		Code: 1,
-		Want: resCode, // expects a string Hello
-		Data: []byte("PING"),
-	}
-	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA, firstHelloMessage)
+
+	SendPING(ctx, host2, peerAddrInfo.ID)
 
 	// Handle termination signals
 	<-ctx.Done()
 
+}
+
+func SendPING(ctx context.Context, host host.Host, peerID peer.ID) {
+
+	msgPING := Message{
+		ID:   rand.Uint64(),
+		Code: uint(0),
+		Want: uint(1), // expects a string Hello
+		Data: []byte("PING"),
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgPING)
+}
+
+func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
+
+	msgPONG := Message{
+		ID:   rand.Uint64(),
+		Code: uint(0),
+		Want: uint(69), // expects a string Hello
+		Data: []byte("PONG"),
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgPONG)
 }
