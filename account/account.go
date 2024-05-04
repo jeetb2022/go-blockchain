@@ -15,28 +15,6 @@ type Account struct {
 	Balance uint64
 }
 
-func ValidateAddress(mineraddr [20]byte) bool {
-	myString := hex.EncodeToString(mineraddr[:])
-
-	// Get the private key from environment variable or generate it if not set
-	privHex := os.Getenv("PRIVATE_KEY")
-	if privHex == "" {
-		privHex = GeneratePrivAndPubKey()
-		// Set the PRIVATE_KEY environment variable
-		os.Setenv("PRIVATE_KEY", privHex)
-		err := WritePrivateKeyToEnvFile(privHex)
-		// Write the private key to the .env file
-		if err != nil {
-			fmt.Println("Error writing PRIVATE_KEY to .env file:", err)
-			return false
-		}
-	}
-
-	fmt.Println("Address:", myString)
-
-	return true
-}
-
 func GenerateRandomHex(length int) (string, error) {
 	// Determine the number of bytes needed for the specified length of hex string
 	numBytes := length / 2

@@ -2,17 +2,27 @@ package database
 
 import (
 	"Blockchain_Project/account"
+	"Blockchain_Project/transaction"
 	"encoding/binary"
+	"sync"
+
+	// "errors"
+	"Blockchain_Project/blockchain"
 	"fmt"
 	"log"
+	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
 	blockDB       *leveldb.DB
+	blockDBNumber *leveldb.DB
 	accountDB     *leveldb.DB
 	transactionDB *leveldb.DB
 )
@@ -22,6 +32,11 @@ func init() {
 
 	// Initialize the block database
 	blockDB, err = leveldb.OpenFile("./levelDB/blockDB", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	blockDBNumber, err = leveldb.OpenFile("./levelDB/blockDBNumber", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,52 +54,165 @@ func init() {
 	}
 }
 
+func SerializeBlock(block *blockchain.Block) ([]byte, error) {
+	encodedBlock, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		return nil, err
+	}
+	return encodedBlock, nil
+}
+
+func DeserializeBlock(encodedBlock []byte) (*blockchain.Block, error) {
+	var block blockchain.Block
+	err := rlp.DecodeBytes(encodedBlock, &block)
+	if err != nil {
+		return nil, err
+	}
+	return &block, nil
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
+
+	return h
+}
+
+var hasherPool = sync.Pool{
+	New: func() interface{} { return sha3.NewLegacyKeccak256() },
+}
+
 // ------------------------ Functions related to blockDB (Cluster 0) ------------------------
 
-func GetCurrentHeight() (int, error) {
-	iter := blockDB.NewIterator(nil, nil)
+func AddBlockData(block *blockchain.Block) error {
+	blockHash := rlpHash(block)
+
+	serializedBlock, err := SerializeBlock(block)
+	if err != nil {
+		return err
+	}
+
+	err = blockDB.Put(blockHash[:], serializedBlock, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetBlockByHash(hash []byte) ([]byte, error) {
+	data, err := blockDB.Get(hash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func PrintAllDataFromBlockDB() error {
+	iter := blockDB.NewIterator(util.BytesPrefix(nil), nil)
 	defer iter.Release()
 
-	height := -1
 	for iter.Next() {
-		key := binary.BigEndian.Uint32(iter.Key())
-		if int(key) > height {
-			height = int(key)
+		key := iter.Key()
+		value := iter.Value()
+
+		fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
+	}
+
+	return nil
+}
+
+// ------------------------ Functions related to blockDBNumber (Cluster 1) ------------------------
+
+func StoreBlockHash(blockNumber uint64, block *blockchain.Block) error {
+	// Calculate the hash of the block
+	blockHash := rlpHash(block)
+
+	// Convert the block number to a string
+	blockNumberStr := strconv.FormatUint(blockNumber, 10)
+
+	// Store the block hash in the database
+	err := blockDBNumber.Put([]byte(blockNumberStr), blockHash[:], nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetCurrentHeight() (uint64, error) {
+	iter := blockDBNumber.NewIterator(nil, nil)
+	defer iter.Release()
+
+	height := uint64(0)
+	for iter.Next() {
+		key := binary.BigEndian.Uint64(iter.Key())
+		if int(key) > int(height) {
+			height = uint64(key)
 		}
 	}
 
 	if err := iter.Error(); err != nil {
-		return -1, fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
+		return uint64(0), fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
 	}
 
 	return height, nil
 }
 
-func AddBlockData(blockData []byte) error {
+func GetLastBlockHash() (common.Hash, error) {
 	// Get the current height
 	height, err := GetCurrentHeight()
 	if err != nil {
-		return fmt.Errorf("error occurred while getting current height: %v", err)
+		return common.Hash{}, fmt.Errorf("error occurred while getting current height: %v", err)
 	}
 
-	// Increment the height to get the new height
-	height++
+	return RetrieveBlockHash(height)
+}
 
-	// Convert the height to a byte slice
-	key := make([]byte, 4)
-	binary.BigEndian.PutUint32(key, uint32(height))
+func RetrieveBlockHash(blockNumber uint64) (common.Hash, error) {
+	// Convert the block number to a string
+	blockNumberStr := strconv.FormatUint(blockNumber, 10)
 
-	// Add the block data to the database
-	err = blockDB.Put(key, blockData, nil)
+	// Retrieve the block hash from the database
+	blockHashBytes, err := GetBlockByHash([]byte(blockNumberStr))
 	if err != nil {
-		return fmt.Errorf("error occurred while adding block data to LevelDB: %v", err)
+		return common.Hash{}, err
 	}
 
-	fmt.Println("Block data added successfully at height:", height)
+	// Convert the byte slice to a common.Hash
+	var blockHash common.Hash
+	copy(blockHash[:], blockHashBytes)
+
+	return blockHash, nil
+}
+
+func PrintAllDataFromBlockDBNumber() error {
+	iter := blockDBNumber.NewIterator(util.BytesPrefix(nil), nil)
+	defer iter.Release()
+
+	for iter.Next() {
+		blockNumber := iter.Key()
+		blockHash := iter.Value()
+
+		fmt.Printf("Block Number: %s, Block Hash: %x\n", string(blockNumber), blockHash)
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
+	}
+
 	return nil
 }
 
-// ------------------------ Functios related to transactionDB (Cluster 1) ------------------------
+// ------------------------ Functios related to transactionDB (Cluster 2) ------------------------
 
 func AddAccountToDB(address [20]byte, account *account.Account) error {
 	// Serialize the account object
@@ -125,14 +253,39 @@ func GetAccountFromDB(address [20]byte) (*account.Account, error) {
 	return &account, nil
 }
 
-// ------------------------ Functios related to transactionDB (Cluster 2) ------------------------
+func PrintAllAccountData() error {
+	iter := accountDB.NewIterator(util.BytesPrefix(nil), nil)
+	defer iter.Release()
+
+	for iter.Next() {
+		address := iter.Key()
+		serializedAccount := iter.Value()
+
+		// Deserialize the account data
+		var account account.Account
+		err := rlp.DecodeBytes(serializedAccount, &account)
+		if err != nil {
+			return fmt.Errorf("error deserializing account: %v", err)
+		}
+
+		fmt.Printf("Address: %x, Account: %+v\n", address, account)
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
+	}
+
+	return nil
+}
+
+// ------------------------ Functios related to transactionDB (Cluster 3) ------------------------
 
 func AddLevelDBData(key, value []byte) error {
 	err := transactionDB.Put(key, value, nil)
 	if err != nil {
 		return fmt.Errorf("error occurred while adding data to LevelDB: %v", err)
 	}
-	fmt.Println("Data added successfully:", string(value))
+	// fmt.Println("Data added successfully:", string(value))
 	return nil
 }
 
@@ -180,36 +333,67 @@ func GetCompleteBlocksDBData() ([][]byte, error) {
 	return datArray, nil
 }
 
-// Delete all data from LevelDB (for local use only)
-func DeleteAllData() error {
-	datArray, err := GetCompleteBlocksDBData()
-	if err != nil {
-		return err
-	}
-	fmt.Println("Deleting all data from LevelDB")
-	for i := range datArray {
-		if err := transactionDB.Delete([]byte(fmt.Sprintf("%d", i)), nil); err != nil {
-			return fmt.Errorf("error occurred while deleting data from LevelDB: %v", err)
-		}
-	}
-	return nil
+func AddSignedTransactionToLevelDB(encodedTx []byte) error {
+	return AddDataToLevelDB(encodedTx)
 }
 
-// Print all blocks data from LevelDB
+func GetSignedTransactionFromLevelDB(key []byte) (*transaction.SignedTransaction, error) {
+	data, err := GetLevelDBData(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Deserialize the transaction
+	var tx transaction.SignedTransaction
+	err = rlp.DecodeBytes(data, &tx)
+	if err != nil {
+		return nil, fmt.Errorf("error occurred while decoding transaction: %v", err)
+	}
+
+	return &tx, nil
+}
+
+func GetCompleteSignedTransactionsDBData() ([]*transaction.SignedTransaction, error) {
+	dataArray, err := GetCompleteBlocksDBData()
+	if err != nil {
+		return nil, err
+	}
+
+	var txs []*transaction.SignedTransaction
+	for _, data := range dataArray {
+		var tx transaction.SignedTransaction
+		err = rlp.DecodeBytes(data, &tx)
+		if err != nil {
+			return nil, fmt.Errorf("error occurred while decoding transaction: %v", err)
+		}
+		txs = append(txs, &tx)
+	}
+
+	return txs, nil
+}
+
 func PrintAllData() error {
-	datArray, err := GetCompleteBlocksDBData()
+	dataArray, err := GetCompleteBlocksDBData()
 	if err != nil {
 		return err
 	}
 
-	for i, data := range datArray {
-		fmt.Printf("Block #%d: %s\n", i, data)
+	for i, data := range dataArray {
+		var tx transaction.SignedTransaction
+		err = rlp.DecodeBytes(data, &tx)
+		if err != nil {
+			return fmt.Errorf("error occurred while decoding transaction: %v", err)
+		}
+
+		fmt.Printf("Block #%d: %+v\n", i, tx)
 	}
+
 	return nil
 }
 
 func Close() {
 	blockDB.Close()
+	blockDBNumber.Close()
 	accountDB.Close()
 	transactionDB.Close()
 }
