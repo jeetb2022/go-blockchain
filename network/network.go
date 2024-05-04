@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
+	"os"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -16,8 +16,9 @@ import (
 
 // func main() {
 
-//		// Run(ctx)
-//	}
+// 	// Run(ctx)
+// }
+
 type Message struct {
 	ID   uint64      `json:"id"`
 	Code int         `json:"code"`
@@ -52,23 +53,36 @@ func Run(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("The public key is %v \n", pub)
+	fmt.Printf("the public key is %v \n ", pub)
 
-	host, err := libp2p.New(libp2p.Identity(priv), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	host2, err := libp2p.New(libp2p.Identity(priv), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+
 	if err != nil {
 		panic(err)
 	}
-	defer host.Close()
 
-	fmt.Printf("The host ID is %s \n", host.ID())
-	fmt.Printf("The host address is %s \n", host.Addrs()[0])
-
-	hostAddr := host.Addrs()[0].String()
-	peerID := host.ID()
+	fmt.Println("Addresses:", host2.Addrs())
+	fmt.Println("ID:", host2.ID())
+	fmt.Println("Peer_ADDR:", os.Getenv("PEER_ADDR"))
+	hostAddr := host2.Addrs()[0].String()
+	peerID := host2.ID()
 	peerAddr := hostAddr + "/p2p/" + peerID.String()
-	fmt.Printf("The peer address is %s \n", peerAddr)
+	fmt.Println("Host_ADDR:", peerAddr)
+	peerMA, err := multiaddr.NewMultiaddr(os.Getenv("PEER_ADDR"))
+	if err != nil {
+		panic(err)
+	}
+	peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+	if err != nil {
+		panic(err)
+	}
 
-	host.SetStreamHandler("/Hello", func(s network.Stream) {
+	if err := host2.Connect(context.Background(), *peerAddrInfo); err != nil {
+		panic(err)
+	}
+	fmt.Println("Connected to", peerAddrInfo.String())
+
+	host2.SetStreamHandler("/Hello", func(s network.Stream) {
 		fmt.Println("Received stream from:", s.Conn().RemotePeer())
 		decoder := json.NewDecoder(s)
 		var msg Message
@@ -77,46 +91,31 @@ func Run(ctx context.Context) {
 			s.Close()
 			return
 		}
+		fmt.Println("Received message:", msg)
+
 		helloMessage := Message{
 			ID:   0,   // Random unique identifier
 			Code: 0,   // Message type for "Hello"
 			Want: nil, // Nothing expected back
-			Data: "Hello from peer 1!",
+			Data: "Hello",
 		}
-		fmt.Println("Received message:", msg.Data)
 		if msg.Want != nil {
-			sendHelloMessage(ctx, host, s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr(), helloMessage)
+			sendHelloMessage(ctx, host2, s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr(), helloMessage)
 		}
-		s.Close()
+		// Do not close the stream here
 	})
 
-	// Define the callback function
-	TimerWithCallback := func() {
-		peers := host.Network().Peers()
-
-		fmt.Println("Callback function called")
-		fmt.Println("Connected peers:")
-		for _, peer := range peers {
-			addrs := host.Network().Peerstore().Addrs(peer)
-			fmt.Printf("Peer ID: %s, Addresses: %v\n", peer, addrs)
-		}
+	// Send the initial Hello message after setting up the stream handler
+	resCode := 1
+	firstHelloMessage := Message{
+		ID:   0,
+		Code: 1,
+		Want: &resCode, // expects a string Hello
+		Data: "Hello",
 	}
+	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA, firstHelloMessage)
 
-	// Start the ticker to execute the callback function every 2 seconds
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	// Handle termination signals
+	<-ctx.Done()
 
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				TimerWithCallback()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Wait for the program to be terminated
-<- ctx.Done()
 }

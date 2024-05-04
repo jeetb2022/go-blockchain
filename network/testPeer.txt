@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -120,8 +117,6 @@ func Run(ctx context.Context) {
 		}
 	}()
 
-	// Wait for the program to be terminated
-	sigCh := make(chan os.Signal)
-	signal.Notify(sigCh, syscall.SIGKILL, syscall.SIGINT)
-	<-sigCh
+	// Handle termination signals
+	<-ctx.Done()
 }
