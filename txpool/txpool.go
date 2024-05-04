@@ -4,6 +4,7 @@ import (
 	"Blockchain_Project/transaction"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -53,5 +54,34 @@ func (tp *TransactionPool) GetAllTransactions() {
 		fmt.Printf("R: %s\n", tx.R.String())
 		fmt.Printf("S: %s\n", tx.S.String())
 		fmt.Println("---------------------------------")
+	}
+}
+
+type Block struct {
+	Transactions []*transaction.SignedTransaction
+}
+
+func (tp *TransactionPool) CreateBlocks() {
+	for {
+		time.Sleep(2 * time.Second)
+
+		var transactions []*transaction.SignedTransaction
+		if len(tp.Transactions) > 10 {
+			transactions = tp.Transactions[:10]    // takiing first 10 transactions
+			tp.Transactions = tp.Transactions[10:] // removing first 10 transactions from pool
+		} else {
+			transactions = tp.Transactions
+			tp.Transactions = nil
+		}
+
+		block := &Block{
+			Transactions: transactions,
+		}
+
+		fmt.Println("Created block with transactions:", block.Transactions)
+
+		if len(tp.Transactions) == 0 {
+			break
+		}
 	}
 }

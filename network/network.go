@@ -2,12 +2,9 @@ package network
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -52,28 +49,25 @@ func sendHelloMessage(ctx context.Context, host host.Host, peerID peer.ID, peerA
 }
 
 func Run(ctx context.Context) {
-	privHex := os.Getenv("HOST_HEX")
-	// Decode hex string to bytes
-	privBytes, err := hex.DecodeString(privHex)
+	priv, pub, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("the public key is %v \n ", pub)
 
-	// Parse bytes into a private key
-	privKey, err := crypto.UnmarshalEd25519PrivateKey(privBytes)
-	if err != nil {
-		panic(err)
-	}
-	host2, err := libp2p.New(libp2p.Identity(privKey), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	host2, err := libp2p.New(libp2p.Identity(priv),libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 
 	if err != nil {
 		panic(err)
 	}
-	defer host2.Close()
 
 	fmt.Println("Addresses:", host2.Addrs())
 	fmt.Println("ID:", host2.ID())
 	fmt.Println("Peer_ADDR:", os.Getenv("PEER_ADDR"))
+	hostAddr := host2.Addrs()[0].String()
+	peerID := host2.ID()
+	peerAddr := hostAddr + "/p2p/" + peerID.String()
+	fmt.Println("Host_ADDR:", peerAddr)
 	peerMA, err := multiaddr.NewMultiaddr(os.Getenv("PEER_ADDR"))
 	if err != nil {
 		panic(err)
@@ -108,8 +102,10 @@ func Run(ctx context.Context) {
 		if msg.Want != nil {
 			sendHelloMessage(ctx, host2, s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr(), helloMessage)
 		}
-		s.Close()
+		// Do not close the stream here
 	})
+
+	// Send the initial Hello message after setting up the stream handler
 	resCode := 1
 	firstHelloMessage := Message{
 		ID:   0,
@@ -119,7 +115,7 @@ func Run(ctx context.Context) {
 	}
 	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA, firstHelloMessage)
 
-	sigCh := make(chan os.Signal)
-	signal.Notify(sigCh, syscall.SIGKILL, syscall.SIGINT)
-	<-sigCh
+	// Handle termination signals
+	<-ctx.Done()
+
 }
