@@ -3,15 +3,18 @@ package cli
 import (
 	// "Blockchain_Project/account"
 
-	"Blockchain_Project/account"
 	"Blockchain_Project/network"
 	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Client struct{}
@@ -30,8 +33,8 @@ func (cli *Client) printUsage() {
 
 }
 
-func convertToAddr(mineraddr string) ([20]byte, error) {
-	var address [20]byte
+func convertToAddr(mineraddr string) (common.Address, error) {
+	var address common.Address
 
 	// Ensure the hexadecimal address string starts with "0x"
 	if !strings.HasPrefix(mineraddr, "0x") {
@@ -51,7 +54,7 @@ func convertToAddr(mineraddr string) ([20]byte, error) {
 	if len(addrBytes) != 20 {
 		return address, fmt.Errorf("invalid address length: must be 20 bytes long")
 	}
-
+	fmt.Println(addrBytes)
 	// Copy the bytes into the address array
 	copy(address[:], addrBytes)
 
@@ -62,7 +65,8 @@ func (cli *Client) Run() {
 
 	fmt.Println("Running the CLI command")
 	cli.validateArgs()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	InitiateNodeFlag := flag.NewFlagSet("initializeNode", flag.ExitOnError)
 	switch os.Args[1] {
@@ -79,15 +83,36 @@ func (cli *Client) Run() {
 			cli.printUsage()
 			panic(err)
 		}
-
-		if !account.ValidateAddress(addrBytes) {
-			fmt.Println("Invalid address")
-			return // Exit early if the address is invalid
-		}
+		fmt.Println(addrBytes)
+		// if !account.ValidateAddress(addrBytes) {
+		// 	fmt.Println("Invalid address")
+		// 	return // Exit early if the address is invalid
+		// }
 
 		// If the address is valid, execute network.Run(ctx)
+
+		done := Start(ctx)
+
+		// Handle termination signals
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+
+		// Signal the network to stop
+		cancel()
+		<-done
+
 		network.Run(ctx)
 	default:
 		cli.printUsage()
 	}
+}
+
+func Start(ctx context.Context) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		network.Run(ctx)
+	}()
+	return done
 }

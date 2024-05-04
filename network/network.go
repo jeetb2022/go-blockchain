@@ -2,13 +2,11 @@ package network
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -23,57 +21,97 @@ import (
 // }
 
 type Message struct {
-	ID   uint64      `json:"id"`
-	Code int         `json:"code"`
-	Want *int        `json:"want,omitempty"`
-	Data interface{} `json:"data"`
+	ID   uint64 `json:"id"`
+	Code uint   `json:"code"`
+	Want uint   `json:"want,omitempty"`
+	Data []byte `json:"data"`
 }
 
 func sendMessage(stream network.Stream, msg Message) {
-	encoder := json.NewEncoder(stream)
-	if err := encoder.Encode(msg); err != nil {
+	// Serialize the message
+	encodedMsg, err := SerializeMessage(msg)
+	if err != nil {
+		fmt.Println("Error serializing message:", err)
+		return
+	}
+
+	// Write the serialized message to the stream
+	_, err = stream.Write(encodedMsg)
+	if err != nil {
 		fmt.Println("Error sending message:", err)
 	}
 }
 
+// SerializeMessage serializes the Message struct into a byte slice
+func SerializeMessage(msg Message) ([]byte, error) {
+	// Encode the message struct
+	encodedMsg, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return nil, err
+	}
+	return encodedMsg, nil
+}
+
+func DeserializeMessage(encodedMsg []byte, msg *Message) error {
+	err := rlp.DecodeBytes(encodedMsg, msg)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func receiveMessage(stream network.Stream) (Message, error) {
+	var msg Message
+
+	// Read the bytes from the stream
+	buf := make([]byte, 1024) // Adjust the buffer size as needed
+	n, err := stream.Read(buf)
+	if err != nil {
+		return msg, err
+	}
+
+	// Deserialize the message using your custom deserialization function
+	err = DeserializeMessage(buf[:n], &msg)
+	if err != nil {
+		return msg, err
+	}
+
+	return msg, nil
+}
+
 func sendHelloMessage(ctx context.Context, host host.Host, peerID peer.ID, peerAddr multiaddr.Multiaddr, helloMessage Message) {
 	fmt.Println("Sending Hello message...")
-
 	stream, err := host.NewStream(ctx, peerID, "/Hello")
 	if err != nil {
 		fmt.Println("Error opening stream to peer:", err)
 		return
 	}
 	defer stream.Close()
-
 	sendMessage(stream, helloMessage)
-
 	fmt.Println("Hello message sent successfully.")
 }
 
 func Run(ctx context.Context) {
-	privHex := os.Getenv("HOST_HEX")
-	// Decode hex string to bytes
-	privBytes, err := hex.DecodeString(privHex)
+	priv, pub, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("the public key is %v \n ", pub)
 
-	// Parse bytes into a private key
-	privKey, err := crypto.UnmarshalEd25519PrivateKey(privBytes)
-	if err != nil {
-		panic(err)
-	}
-	host2, err := libp2p.New(libp2p.Identity(privKey), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	host2, err := libp2p.New(libp2p.Identity(priv), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 
 	if err != nil {
 		panic(err)
 	}
-	defer host2.Close()
 
 	fmt.Println("Addresses:", host2.Addrs())
 	fmt.Println("ID:", host2.ID())
 	fmt.Println("Peer_ADDR:", os.Getenv("PEER_ADDR"))
+	hostAddr := host2.Addrs()[0].String()
+	peerID := host2.ID()
+	peerAddr := hostAddr + "/p2p/" + peerID.String()
+	fmt.Println("Host_ADDR:", peerAddr)
 	peerMA, err := multiaddr.NewMultiaddr(os.Getenv("PEER_ADDR"))
 	if err != nil {
 		panic(err)
@@ -90,36 +128,25 @@ func Run(ctx context.Context) {
 
 	host2.SetStreamHandler("/Hello", func(s network.Stream) {
 		fmt.Println("Received stream from:", s.Conn().RemotePeer())
-		decoder := json.NewDecoder(s)
-		var msg Message
-		if err := decoder.Decode(&msg); err != nil {
-			fmt.Println("Error decoding message:", err)
-			s.Close()
-			return
+		msg, err := receiveMessage(s)
+		if err != nil {
+			panic(err)
 		}
-		fmt.Println("Received message:", msg)
+		fmt.Println(string(msg.Data))
 
-		helloMessage := Message{
-			ID:   0,   // Random unique identifier
-			Code: 0,   // Message type for "Hello"
-			Want: nil, // Nothing expected back
-			Data: "Hello",
-		}
-		if msg.Want != nil {
-			sendHelloMessage(ctx, host2, s.Conn().RemotePeer(), s.Conn().RemoteMultiaddr(), helloMessage)
-		}
-		s.Close()
 	})
-	resCode := 1
+	// rand.Seed(time.Now().UnixNano())
+	// Send the initial Hello message after setting up the stream handler
+	resCode := uint(1)
 	firstHelloMessage := Message{
-		ID:   0,
+		ID:   rand.Uint64(),
 		Code: 1,
-		Want: &resCode, // expects a string Hello
-		Data: "Hello",
+		Want: resCode, // expects a string Hello
+		Data: []byte("PING"),
 	}
 	sendHelloMessage(ctx, host2, peerAddrInfo.ID, peerMA, firstHelloMessage)
 
-	sigCh := make(chan os.Signal)
-	signal.Notify(sigCh, syscall.SIGKILL, syscall.SIGINT)
-	<-sigCh
+	// Handle termination signals
+	<-ctx.Done()
+
 }

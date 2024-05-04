@@ -1,4 +1,4 @@
-package utils
+package validation
 
 import (
 	"Blockchain_Project/database"
