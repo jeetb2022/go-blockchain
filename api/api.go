@@ -17,6 +17,9 @@ import (
 )
 
 var tp *txpool.TransactionPool
+func GetTxPool(p *txpool.TransactionPool) {
+	tp = p
+}
 
 func GenerateRandomAddress() common.Address {
 	// Generate a random byte slice of length 20 (address size)
@@ -157,9 +160,7 @@ func BlockNumberHandler(w http.ResponseWriter, r *http.Request) {
 // 	}
 
 // }
-func GetTxPool(p *txpool.TransactionPool) {
-	tp = p
-}
+
 
 // Handler function to handle /getNonce endpoint with query parameter "address"
 func GetNonceHandler(w http.ResponseWriter, r *http.Request) {

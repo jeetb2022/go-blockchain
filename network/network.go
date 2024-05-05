@@ -4,6 +4,7 @@ import (
 	"Blockchain_Project/blockchain"
 	"Blockchain_Project/database"
 	"Blockchain_Project/transaction"
+	"Blockchain_Project/txpool"
 	"context"
 	"fmt"
 	"io"
@@ -32,6 +33,8 @@ var peerAddrList []string
 var ctxt context.Context
 var hostPeerAddr string
 var globalHost host.Host
+
+var tp *txpool.TransactionPool
 
 type Message struct {
 	ID   uint64 `json:"id"`
@@ -195,12 +198,11 @@ func Run(ctx context.Context) {
 	ConnectToPeers(host)
 
 	host.SetStreamHandler("/Hello", func(s network.Stream) {
-		// fmt.Println("Received stream from:", s.Conn().RemotePeer())
 		msg, err := receiveMessage(s)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(string(msg.Data))
+		// fmt.Println(string(msg.Data))
 		if msg.Want == uint(1) {
 			SendPONG(ctx, host, s.Conn().RemotePeer())
 		}
@@ -209,9 +211,10 @@ func Run(ctx context.Context) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("This is from the peer", RecvedTransaction)
-
+			fmt.Println("This transaction is from the peer", RecvedTransaction)
+			tp.AddTransactionToTxPool(&RecvedTransaction)
 		}
+
 
 	})
 
@@ -411,4 +414,8 @@ func SendGetLatestBlockResponse(ctx context.Context, host host.Host, peerID peer
 
 func GetPeerAddrs() []string {
 	return peerAddrList
+}
+
+func GetTxPool(p *txpool.TransactionPool) {
+	tp = p
 }
