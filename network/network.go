@@ -1,6 +1,8 @@
 package network
 
 import (
+	"Blockchain_Project/blockchain"
+	"Blockchain_Project/database"
 	"context"
 	"fmt"
 	"io"
@@ -272,24 +274,97 @@ func SendPING(ctx context.Context, host host.Host) {
 }
 
 func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
-
 	msgPONG := Message{
 		ID:   rand.Uint64(),
-		Code: uint(0),
-		Want: uint(69),
+		Code: uint(1),
+		Want: uint(542),
 		Data: []byte("PONG"),
 	}
 	sendMessageWithCTX(ctx, host, peerID, msgPONG)
 }
-func SendTransaction(ctx context.Context, host host.Host, peerID peer.ID) {
 
-	msgPONG := Message{
-		ID:   rand.Uint64(),
-		Code: uint(4),
-		Want: uint(69),
-		Data: []byte("PONG"),
+func SendNewBlock(ctx context.Context, host host.Host, peerID peer.ID, block blockchain.Block) error {
+	encodedBlock, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		return fmt.Errorf("error occurred while encoding block: %v", err)
 	}
-	sendMessageWithCTX(ctx, host, peerID, msgPONG)
+
+	msgNewBlock := Message{
+		ID:   rand.Uint64(),
+		Code: uint(5),
+		Want: uint(542),
+		Data: encodedBlock,
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgNewBlock)
+
+	return nil
+}
+
+func SendGetBlock(ctx context.Context, host host.Host, peerID peer.ID, blockNumbers []int) error {
+	encodedBlockNumbers, err := rlp.EncodeToBytes(blockNumbers)
+	if err != nil {
+		return fmt.Errorf("error occurred while encoding block numbers: %v", err)
+	}
+
+	msgGetBlock := Message{
+		ID:   rand.Uint64(),
+		Code: uint(6),
+		Want: uint(7),
+		Data: encodedBlockNumbers,
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgGetBlock)
+
+	return nil
+}
+
+func SendBlock(ctx context.Context, host host.Host, peerID peer.ID, blocks []blockchain.Block) error {
+	blocksToSend := make([]byte, len(blocks))
+	for i := range blocks {
+		block, err := database.RetrieveBlockHash(uint64(i))
+		if err != nil {
+			return fmt.Errorf("error occurred while retrieving block: %v", err)
+		}
+		serializedBlock, err := rlp.EncodeToBytes(block)
+		blocksToSend = append(blocksToSend, serializedBlock...)
+	}
+	msgBlock := Message{
+		ID:   rand.Uint64(),
+		Code: uint(7),
+		Want: uint(542),
+		Data: blocksToSend,
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgBlock)
+	return nil
+}
+
+func SendGetLatestBlock(ctx context.Context, host host.Host, peerID peer.ID) {
+	msgGetLatestBlock := Message{
+		ID:   rand.Uint64(),
+		Code: uint(8),
+		Want: uint(9),
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgGetLatestBlock)
+}
+
+func SendGetLatestBlockResponse(ctx context.Context, host host.Host, peerID peer.ID) error {
+	latestBlockNumber, err := database.GetCurrentHeight()
+	if err != nil {
+		panic(err)
+	}
+	encodedLatestBlockNumber, err := rlp.EncodeToBytes(latestBlockNumber)
+	if err != nil {
+		return fmt.Errorf("error occurred while encoding latest block number: %v", err)
+	}
+
+	msgGetLatestBlockResponse := Message{
+		ID:   rand.Uint64(),
+		Code: uint(9),
+		Want: uint(542),
+		Data: encodedLatestBlockNumber,
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgGetLatestBlockResponse)
+
+	return nil
 }
 
 func GetPeerAddrs() []string {
