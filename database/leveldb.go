@@ -71,7 +71,7 @@ func DeserializeBlock(encodedBlock []byte) (*blockchain.Block, error) {
 	return &block, nil
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
+func RlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
@@ -88,7 +88,7 @@ var hasherPool = sync.Pool{
 // ------------------------ Functions related to blockDB (Cluster 0) ------------------------
 
 func AddBlockData(block *blockchain.Block) error {
-	blockHash := rlpHash(block)
+	blockHash := RlpHash(block)
 
 	serializedBlock, err := SerializeBlock(block)
 	if err != nil {
@@ -103,13 +103,14 @@ func AddBlockData(block *blockchain.Block) error {
 	return nil
 }
 
-func GetBlockByHash(hash []byte) ([]byte, error) {
+func GetBlockByHash(hash []byte) (*blockchain.Block, error) {
 	data, err := blockDB.Get(hash, nil)
 	if err != nil {
 		return nil, err
 	}
+	deserializeBlockData, err := DeserializeBlock(data)
 
-	return data, nil
+	return deserializeBlockData, nil
 }
 
 func PrintAllDataFromBlockDB() error {
@@ -134,7 +135,7 @@ func PrintAllDataFromBlockDB() error {
 
 func StoreBlockHash(blockNumber uint64, block *blockchain.Block) error {
 	// Calculate the hash of the block
-	blockHash := rlpHash(block)
+	blockHash := RlpHash(block)
 
 	// Convert the block number to a string
 	blockNumberStr := strconv.FormatUint(blockNumber, 10)
@@ -167,31 +168,29 @@ func GetCurrentHeight() (uint64, error) {
 	return height, nil
 }
 
-func GetLastBlockHash() (common.Hash, error) {
+func GetLastBlockHash() (*blockchain.Block, error) {
 	// Get the current height
 	height, err := GetCurrentHeight()
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("error occurred while getting current height: %v", err)
+		return nil, fmt.Errorf("error occurred while getting current height: %v", err)
 	}
 
 	return RetrieveBlockHash(height)
 }
 
-func RetrieveBlockHash(blockNumber uint64) (common.Hash, error) {
+func RetrieveBlockHash(blockNumber uint64) (*blockchain.Block, error) {
 	// Convert the block number to a string
 	blockNumberStr := strconv.FormatUint(blockNumber, 10)
 
 	// Retrieve the block hash from the database
-	blockHashBytes, err := GetBlockByHash([]byte(blockNumberStr))
+	block, err := GetBlockByHash([]byte(blockNumberStr))
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 
 	// Convert the byte slice to a common.Hash
-	var blockHash common.Hash
-	copy(blockHash[:], blockHashBytes)
 
-	return blockHash, nil
+	return block, nil
 }
 
 func PrintAllDataFromBlockDBNumber() error {
@@ -213,6 +212,27 @@ func PrintAllDataFromBlockDBNumber() error {
 }
 
 // ------------------------ Functios related to transactionDB (Cluster 2) ------------------------
+
+func GetStateRoot() []common.Hash {
+	var balanceHashes []common.Hash
+
+	iter := accountDB.NewIterator(nil, nil)
+	for iter.Next() {
+		// Assume the value is the balance
+		balance := iter.Value()
+
+		// Hash the balance
+		balanceHash := RlpHash(balance)
+		balanceHashes = append(balanceHashes, balanceHash)
+	}
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		return nil
+	}
+
+	return balanceHashes
+}
 
 func AddAccountToDB(address [20]byte, account *account.Account) error {
 	// Serialize the account object
