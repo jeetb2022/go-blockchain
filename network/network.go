@@ -3,8 +3,12 @@ package network
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
-	"os"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/libp2p/go-libp2p"
@@ -19,6 +23,11 @@ import (
 
 // 	// Run(ctx)
 // }
+
+var peerIdList []string
+var peerAddrList []string
+var ctxt context.Context
+var hostPeerAddr string
 
 type Message struct {
 	ID   uint64 `json:"id"`
@@ -90,41 +99,97 @@ func sendMessageWithCTX(ctx context.Context, host host.Host, peerID peer.ID, hel
 	sendMessage(stream, helloMessage)
 }
 
-func Run(ctx context.Context) {
+func StartNewNode() (host.Host, error) {
 	priv, pub, err := crypto.GenerateKeyPair(crypto.Ed25519, -1)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	fmt.Printf("the public key is %v \n ", pub)
 
 	host2, err := libp2p.New(libp2p.Identity(priv), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	fmt.Println("Addresses:", host2.Addrs())
 	fmt.Println("ID:", host2.ID())
-	fmt.Println("Peer_ADDR:", os.Getenv("PEER_ADDR"))
+	// fmt.Println("Peer_ADDR:", os.Getenv("PEER_ADDR"))
 	hostAddr := host2.Addrs()[0].String()
 	peerID := host2.ID()
 	peerAddr := hostAddr + "/p2p/" + peerID.String()
 	fmt.Println("Host_ADDR:", peerAddr)
-	peerMA, err := multiaddr.NewMultiaddr(os.Getenv("PEER_ADDR"))
-	if err != nil {
-		panic(err)
+	hostPeerAddr = peerAddr
+	return host2, nil
+}
+
+func ConnectToPeers(host host.Host) {
+	for _, addr := range peerAddrList {
+		if addr != "" {
+
+			fmt.Println(addr)
+			peerMA, err := multiaddr.NewMultiaddr(addr)
+			if err != nil {
+				panic(err)
+			}
+			peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+			if err != nil {
+				panic(err)
+			}
+			if err := host.Connect(context.Background(), *peerAddrInfo); err != nil {
+				panic(err)
+			}
+			fmt.Println("Connected to", peerAddrInfo.String())
+
+		}
 	}
-	peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+
+}
+func GetMultiAddr() { // []multiaddr.Multiaddr,[]peer.AddrInfo
+	KnownHosturl := "http://10.1.153.234:8000/getKnownHosts"
+	resp, err := http.Get(KnownHosturl)
+	if err != nil {
+		log.Fatalf("Error making GET request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if the response status code is OK
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading response body: %v", err)
+	}
+
+	// Convert the byte slice to a string
+	addrString := string(body)
+
+	// Split the string into individual addresses based on newline delimiter
+	addrList := strings.Split(addrString, "\n")
+
+	// Print the list of addresses
+	fmt.Println("List of addresses:")
+	for _, addr := range addrList {
+		fmt.Println(addr)
+	}
+	peerAddrList = addrList
+
+}
+
+func Run(ctx context.Context) {
+	ctxt = ctx
+	host, err := StartNewNode()
 	if err != nil {
 		panic(err)
 	}
 
-	if err := host2.Connect(context.Background(), *peerAddrInfo); err != nil {
-		panic(err)
-	}
-	fmt.Println("Connected to", peerAddrInfo.String())
+	GetMultiAddr()
+	ConnectToPeers(host)
 
-	host2.SetStreamHandler("/Hello", func(s network.Stream) {
+	host.SetStreamHandler("/Hello", func(s network.Stream) {
 		// fmt.Println("Received stream from:", s.Conn().RemotePeer())
 		msg, err := receiveMessage(s)
 		if err != nil {
@@ -132,27 +197,78 @@ func Run(ctx context.Context) {
 		}
 		fmt.Println(string(msg.Data))
 		if msg.Want == uint(1) {
-			SendPONG(ctx, host2, s.Conn().RemotePeer())
+			SendPONG(ctx, host, s.Conn().RemotePeer())
 		}
 
 	})
 
-	SendPING(ctx, host2, peerAddrInfo.ID)
+	SendPING(ctx, host)
 
+	GetUpdatedPeerList := func() {
+		var addresses []string
+
+		for _, conn := range host.Network().Conns() {
+			// Extract peer addresses from the connection
+			remoteAddr := conn.RemoteMultiaddr().String()
+
+			// Extract Peer ID
+			remotePeerID := conn.RemotePeer()
+
+			// Construct the multiaddress with Peer ID
+			remoteAddrWithPeerID := fmt.Sprintf("%s/p2p/%s", remoteAddr, remotePeerID)
+
+			// Add the peer addresses to the list
+			addresses = append(addresses, remoteAddrWithPeerID)
+		}
+		fmt.Println("List of peer addresses:")
+		addresses = append(addresses, hostPeerAddr)
+		for _, addr := range addresses {
+			fmt.Println(addr)
+		}
+		peerAddrList = addresses
+
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				GetUpdatedPeerList()
+			}
+		}
+	}()
 	// Handle termination signals
 	<-ctx.Done()
 
 }
 
-func SendPING(ctx context.Context, host host.Host, peerID peer.ID) {
+func SendPING(ctx context.Context, host host.Host) {
 
 	msgPING := Message{
 		ID:   rand.Uint64(),
 		Code: uint(0),
-		Want: uint(1), // expects a string Hello
+		Want: uint(1),
 		Data: []byte("PING"),
 	}
-	sendMessageWithCTX(ctx, host, peerID, msgPING)
+	for _, addr := range peerAddrList {
+		if addr != "" {
+
+			peerMA, err := multiaddr.NewMultiaddr(addr)
+			if err != nil {
+				panic(err)
+			}
+			peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+			if err != nil {
+				panic(err)
+			}
+
+			sendMessageWithCTX(ctx, host, peerAddrInfo.ID, msgPING)
+		}
+	}
+
 }
 
 func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
@@ -160,8 +276,22 @@ func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
 	msgPONG := Message{
 		ID:   rand.Uint64(),
 		Code: uint(0),
-		Want: uint(69), // expects a string Hello
+		Want: uint(69),
 		Data: []byte("PONG"),
 	}
 	sendMessageWithCTX(ctx, host, peerID, msgPONG)
+}
+func SendTransaction(ctx context.Context, host host.Host, peerID peer.ID) {
+
+	msgPONG := Message{
+		ID:   rand.Uint64(),
+		Code: uint(4),
+		Want: uint(69),
+		Data: []byte("PONG"),
+	}
+	sendMessageWithCTX(ctx, host, peerID, msgPONG)
+}
+
+func GetPeerAddrs() []string {
+	return peerAddrList
 }

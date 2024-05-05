@@ -17,3 +17,4 @@ func ValidateAddress(address [20]byte) (bool, error) {
 		return true, nil
 	}
 }
+

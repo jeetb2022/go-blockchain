@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -15,4 +16,11 @@ type SignedTransaction struct {
 	Value   uint64
 	Nonce   uint64
 	V, R, S *big.Int
+}
+
+func VerifyTx(tx SignedTransaction) bool {
+	status := true
+	// Apply Verify Logic
+	
+	return status
 }

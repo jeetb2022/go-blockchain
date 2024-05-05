@@ -3,12 +3,16 @@ package main
 import (
 	"Blockchain_Project/api"
 	"Blockchain_Project/cli"
+	"Blockchain_Project/txpool"
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
+
+var tp = txpool.NewTransactionPool()
 
 func main() {
 	// Load environment variables
@@ -17,6 +21,24 @@ func main() {
 
 	// Create a new instance of the CLI client
 	cmd := cli.Client{}
+	api.GetTxPool(tp)
+
+	TimerWithCallback := func() {
+		tp.GetAllTransactions()
+	}
+
+	// Start the ticker to execute the callback function every 2 seconds
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				TimerWithCallback()
+			}
+		}
+	}()
 
 	// Start the HTTP server in a goroutine
 	go func() {
@@ -27,24 +49,21 @@ func main() {
 		http.HandleFunc("/getBalance", api.GetBalanceHandler)
 
 		// Start the HTTP server
-		fmt.Println("Server is running on port 8000")
-		if err := http.ListenAndServe(":8000", nil); err != nil {
+		fmt.Println("Server is running on port 8001")
+		if err := http.ListenAndServe(":8001", nil); err != nil {
 			fmt.Printf("Failed to start HTTP server: %v\n", err)
 		}
 	}()
 	cmd.Run()
-
-	// tp := txpool.NewTransactionPool()
-
 	// // Generate 100 demo transactions
 	// for i := 0; i < 100; i++ {
 	// 	sgnTx := &transaction.SignedTransaction{
 	// 		To:    common.Address{byte(i)},
 	// 		Value: uint64(rand.Intn(1000)),
 	// 		Nonce: uint64(i),
-	// 		V:     big.NewInt(int64(rand.Intn(1000))),
-	// 		R:     big.NewInt(int64(rand.Intn(1000))),
-	// 		S:     big.NewInt(int64(rand.Intn(1000))),
+	// V:     big.NewInt(int64(rand.Intn(1000))),
+	// R:     big.NewInt(int64(rand.Intn(1000))),
+	// S:     big.NewInt(int64(rand.Intn(1000))),
 	// 	}
 
 	// 	err := tp.AddTransactionToTxPool(sgnTx)
