@@ -5,6 +5,7 @@ import (
 	"Blockchain_Project/database"
 	"Blockchain_Project/transaction"
 	"Blockchain_Project/txpool"
+	"Blockchain_Project/utils"
 	"context"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -33,6 +35,8 @@ var peerAddrList []string
 var ctxt context.Context
 var hostPeerAddr string
 var globalHost host.Host
+var localLatestBlock uint64
+var minerAddr common.Address
 
 var tp *txpool.TransactionPool
 
@@ -153,7 +157,7 @@ func ConnectToPeers(host host.Host) {
 
 }
 func GetMultiAddr() { // []multiaddr.Multiaddr,[]peer.AddrInfo
-	KnownHosturl := "http://10.1.153.234:8000/getKnownHosts"
+	KnownHosturl := "http://10.1.153.234:8009/getKnownHosts"
 	resp, err := http.Get(KnownHosturl)
 	if err != nil {
 		log.Fatalf("Error making GET request: %v", err)
@@ -186,8 +190,14 @@ func GetMultiAddr() { // []multiaddr.Multiaddr,[]peer.AddrInfo
 
 }
 
-func Run(ctx context.Context) {
+func Run(ctx context.Context, minerAddr common.Address) {
 	ctxt = ctx
+	minerAddr = minerAddr
+	locallatestblock, err := database.GetCurrentHeight()
+	if err != nil {
+		panic(err)
+	}
+	localLatestBlock = locallatestblock
 	host, err := StartNewNode()
 	if err != nil {
 		panic(err)
@@ -214,7 +224,15 @@ func Run(ctx context.Context) {
 			fmt.Println("This transaction is from the peer", RecvedTransaction)
 			tp.AddTransactionToTxPool(&RecvedTransaction)
 		}
+		if msg.Code == uint(5) {
+			// var RecvedBlock blockchain.Block
+			// err := rlp.DecodeBytes(msg.Data, &RecvedBlock)
+			// if err != nil {
+			// 	panic(err)
+			// }
 
+			fmt.Println("This blockchain is from the peer", msg.Data)
+		}
 
 	})
 
@@ -242,6 +260,13 @@ func Run(ctx context.Context) {
 			fmt.Println(addr)
 		}
 		peerAddrList = addresses
+		time.Sleep(time.Second * 5)
+		if true {
+			err := SendNewBlock()
+			if err != nil {
+				panic(err)
+			}
+		}
 
 	}
 
@@ -280,8 +305,9 @@ func SendPING(ctx context.Context, host host.Host) {
 			if err != nil {
 				panic(err)
 			}
-
-			sendMessageWithCTX(ctx, host, peerAddrInfo.ID, msgPING)
+			if hostPeerAddr != addr {
+				sendMessageWithCTX(ctx, host, peerAddrInfo.ID, msgPING)
+			}
 		}
 	}
 
@@ -297,8 +323,13 @@ func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
 	sendMessageWithCTX(ctx, host, peerID, msgPONG)
 }
 
-func SendNewBlock(ctx context.Context, host host.Host, peerID peer.ID, block blockchain.Block) error {
-	encodedBlock, err := rlp.EncodeToBytes(block)
+func SendNewBlock() error {
+
+	minedBlock := CreateBlocks(minerAddr)
+
+	// fmt.Println("Mined block: ", minedBlock)
+
+	encodedBlock, err := rlp.EncodeToBytes(minedBlock)
 	if err != nil {
 		return fmt.Errorf("error occurred while encoding block: %v", err)
 	}
@@ -306,10 +337,25 @@ func SendNewBlock(ctx context.Context, host host.Host, peerID peer.ID, block blo
 	msgNewBlock := Message{
 		ID:   rand.Uint64(),
 		Code: uint(5),
-		Want: uint(542),
+		Want: uint(10),
 		Data: encodedBlock,
 	}
-	sendMessageWithCTX(ctx, host, peerID, msgNewBlock)
+	for _, addr := range peerAddrList {
+		if addr != "" {
+
+			peerMA, err := multiaddr.NewMultiaddr(addr)
+			if err != nil {
+				panic(err)
+			}
+			peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+			if err != nil {
+				panic(err)
+			}
+			if hostPeerAddr != addr {
+				sendMessageWithCTX(ctxt, globalHost, peerAddrInfo.ID, msgNewBlock)
+			}
+		}
+	}
 
 	return nil
 }
@@ -331,7 +377,7 @@ func SendGetBlock(ctx context.Context, host host.Host, peerID peer.ID, blockNumb
 	return nil
 }
 
-func SendBlock(ctx context.Context, host host.Host, peerID peer.ID, blocks []blockchain.Block) error {
+func SendBlocks(ctx context.Context, host host.Host, peerID peer.ID, blocks []blockchain.Block) error {
 	blocksToSend := make([]byte, len(blocks))
 	for i := range blocks {
 		block, err := database.RetrieveBlockHash(uint64(i))
@@ -376,7 +422,9 @@ func SendTransaction(signedTransaction transaction.SignedTransaction) {
 			if err != nil {
 				panic(err)
 			}
-			sendMessageWithCTX(ctxt, globalHost, peerAddrInfo.ID, msgTransaction)
+			if hostPeerAddr != addr {
+				sendMessageWithCTX(ctxt, globalHost, peerAddrInfo.ID, msgTransaction)
+			}
 		}
 	}
 
@@ -418,4 +466,124 @@ func GetPeerAddrs() []string {
 
 func GetTxPool(p *txpool.TransactionPool) {
 	tp = p
+}
+func GetMinerAddr() common.Address {
+	return minerAddr
+}
+
+// func GetMinedBlock() *blockchain.Block {
+// 	// Create a new block
+
+// 	block := &blockchain.Block{
+// 		Transactions: make([]*transaction.SignedTransaction, 0),
+// 	}
+
+// 	// Maximum number of transactions to add to the block
+// 	maxTransactions := 10
+// 	var pickedTransactions []transaction.SignedTransaction
+// 	// Iterate through transactions in the transaction pool
+// 	for i := 0; i < len(tp.Transactions) && i < maxTransactions; i++ {
+// 		if len(tp.Transactions) <= 0 {
+// 			break
+// 		}
+// 		tx := tp.Transactions[i]
+
+// 		// Add the transaction to the block
+// 		block.Transactions = append(block.Transactions, tx)
+// 		pickedTransactions := append(pickedTransactions, *tx)
+// 		pickedTransactions = pickedTransactions
+
+// 		// Remove the transaction from the pool
+// 		tp.Transactions = append(tp.Transactions[:i], tp.Transactions[i+1:]...)
+
+// 		// Update the index to handle the removed transaction
+// 		i--
+
+// 	}
+
+// stateRoot := utils.StateRoot()
+// transactionRoot := utils.CalculateTransactionsRoot(pickedTransactions)
+// parentHash, err := database.GetLastBlockHash()
+// parentHashBytes := database.RlpHash(parentHash)
+// currentHeight, err := database.GetCurrentHeight()
+// if err != nil {
+// 	panic(err)
+// }
+// // if err != nil {
+// // 	panic(err)
+// // }
+// timestamp := time.Now().Unix()
+// minerAddr := minerAddr
+// blockHeader := &blockchain.Header{
+// 	ParentHash:       parentHashBytes,
+// 	Miner:            minerAddr,
+// 	StateRoot:        stateRoot,
+// 	TransactionsRoot: transactionRoot,
+// 	Number:           currentHeight,
+// 	Timestamp:        uint64(timestamp),
+// }
+// extradata := blockchain.SignHeader(*blockHeader)
+// blockHeader.ExtraData = extradata[:]
+// block.Header = blockHeader
+// return block
+// }
+
+func CreateBlocks(miner common.Address) blockchain.Block {
+	// blockNumber := uint64(0)
+	// for {
+	// time.Sleep(2 * time.Second)
+	if len(tp.Transactions) == 0 {
+		emptyBlock := blockchain.Block{}
+		return emptyBlock
+	}
+	var transactions []*transaction.SignedTransaction
+	if len(tp.Transactions) > 3 {
+		transactions = tp.Transactions[:3]    // taking first 10 transactions
+		tp.Transactions = tp.Transactions[3:] // removing first 10 transactions from pool
+	} else {
+		transactions = tp.Transactions
+		tp.Transactions = nil
+	}
+
+	var signedTransactions []transaction.SignedTransaction
+
+	// Iterate over each transaction in the transactions slice
+	for _, tx := range transactions {
+		// Append each transaction to the signedTransactions slice
+		signedTransactions = append(signedTransactions, *tx)
+	}
+
+	// Create the block header
+	stateRoot := utils.StateRoot()
+	transactionRoot := utils.CalculateTransactionsRoot(signedTransactions)
+	parentHash, err := database.GetLastBlockHash()
+	parentHashBytes := database.RlpHash(parentHash)
+	currentHeight, err := database.GetCurrentHeight()
+	if err != nil {
+		panic(err)
+	}
+	// if err != nil {
+	// 	panic(err)
+	// }
+	timestamp := time.Now().Unix()
+	minerAddr := minerAddr
+	blockHeader := &blockchain.Header{
+		ParentHash:       parentHashBytes,
+		Miner:            minerAddr,
+		StateRoot:        stateRoot,
+		TransactionsRoot: transactionRoot,
+		Number:           currentHeight,
+		Timestamp:        uint64(timestamp),
+	}
+	extradata := blockchain.SignHeader(*blockHeader)
+	blockHeader.ExtraData = extradata[:]
+	// return block
+	block := blockchain.Block{
+		Header:       blockHeader,
+		Transactions: transactions,
+	}
+
+	fmt.Println("Created block with transactions:", block)
+	// }
+	return block
 }

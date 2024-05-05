@@ -2,14 +2,30 @@ package utils
 
 import (
 	"Blockchain_Project/database"
+	"Blockchain_Project/transaction"
 	"fmt"
 	"sync"
-	"Blockchain_Project/blockchain"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
+
+type Block struct {
+	Header       *Header
+	Transactions []*transaction.SignedTransaction
+}
+
+type Header struct {
+	ParentHash       common.Hash
+	Miner            common.Address
+	StateRoot        common.Hash
+	TransactionsRoot common.Hash
+	Number           uint64
+	Timestamp        uint64
+	ExtraData        []byte
+}
 
 func ValidateAddress(address [20]byte) (bool, error) {
 	_, err := database.GetAccountFromDB(address)
@@ -25,10 +41,10 @@ func ValidateAddress(address [20]byte) (bool, error) {
 }
 
 func StateRoot() common.Hash {
-	return hashList(database.GetStateRoot())
+	return HashList(database.GetStateRoot())
 }
 
-func hashList(hashes []common.Hash) common.Hash {
+func HashList(hashes []common.Hash) common.Hash {
 	for len(hashes) > 1 {
 		var newHashes []common.Hash
 		for i := 0; i < len(hashes); i += 2 {
@@ -59,14 +75,14 @@ var hasherPool = sync.Pool{
 	New: func() interface{} { return sha3.NewLegacyKeccak256() },
 }
 
-func CalculateTransactionsRoot(block *blockchain.Block) common.Hash {
+func CalculateTransactionsRoot(transactions []transaction.SignedTransaction) common.Hash {
 	var txHashes []common.Hash
-	for _, tx := range block.Transactions {
+	for _, tx := range transactions {
 		txHash := rlpHash(tx)
 		txHashes = append(txHashes, txHash)
 	}
 
-	transactionsRoot := hashList(txHashes)
+	transactionsRoot := HashList(txHashes)
 
 	return transactionsRoot
 }

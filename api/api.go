@@ -1,22 +1,26 @@
 package api
 
 import (
+	"Blockchain_Project/account"
 	"Blockchain_Project/database"
 	"Blockchain_Project/network"
 	"Blockchain_Project/transaction"
 	"Blockchain_Project/txpool"
+	"Blockchain_Project/validation"
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	math_rand "math/rand"
 	"net/http"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var tp *txpool.TransactionPool
+
 func GetTxPool(p *txpool.TransactionPool) {
 	tp = p
 }
@@ -37,30 +41,61 @@ func GenerateRandomAddress() common.Address {
 
 // Handler function to handle /sendTx endpoint
 func SendTxHandler(w http.ResponseWriter, r *http.Request) {
-	tx := transaction.SignedTransaction{
-		Nonce: 43,
-		To:    GenerateRandomAddress(),
-		Value: 1000,
-		V:     big.NewInt(int64(math_rand.Intn(1000))),
-		R:     big.NewInt(int64(math_rand.Intn(1000))),
-		S:     big.NewInt(int64(math_rand.Intn(1000))),
+	var tx transaction.SignedTransaction
+	var req struct {
+		SignedTxn string `json:"signed"`
 	}
-	// if !validation.ValidateTransaction(&tx) {
-	// 	http.Error(w, "Transaction verification failed", http.StatusBadRequest)
-	// }
-	fmt.Println("This is lassssststtttttttttt")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println(req.SignedTxn)
+	encodedSignedTxn := req.SignedTxn
+	decodedString, err := hex.DecodeString(encodedSignedTxn)
+
+	if err := rlp.DecodeBytes(decodedString, &tx); err != nil {
+		panic(err)
+	}
+	// Decode the request body into the SignedTransaction struct
+	if !validation.ValidateTransaction(&tx) {
+		http.Error(w, "Transaction verification failed", http.StatusBadRequest)
+		return
+	}
+	// Add the transaction to the transaction pool
 	tp.AddTransactionToTxPool(&tx)
 
+	// Send the transaction over the network
 	network.SendTransaction(tx)
-	// tp.GetAllTransactions()
+
 	w.WriteHeader(http.StatusOK)
-	message := "Transaction added scessfully"
-	_, err := w.Write([]byte(message))
+	message := "Transaction added successfully"
+	_, err = w.Write([]byte(message))
 	if err != nil {
 		// Handle error if unable to write to response
 		panic(err)
 	}
+}
 
+func SendUnsignedTxHandler(w http.ResponseWriter, r *http.Request) {
+	var tx transaction.SignedTransaction
+
+	err := json.NewDecoder(r.Body).Decode(&tx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	if !validation.ValidateTransaction(&tx) {
+		http.Error(w, "Transaction verification failed", http.StatusBadRequest)
+		return
+	}
+	tp.AddTransactionToTxPool(&tx)
+	network.SendTransaction(tx)
+	// tp.GetAllTransactions()
+	w.WriteHeader(http.StatusOK)
+	message := "Transaction added scessfully"
+	_, err = w.Write([]byte(message))
+	if err != nil {
+		panic(err)
+	}
 }
 
 // func SendTxHandler(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +159,7 @@ func BlockNumberHandler(w http.ResponseWriter, r *http.Request) {
 // // Handler function to handle /block endpoint with query parameter "hash"
 // func blockByHashHandler(w http.ResponseWriter, r *http.Request) {
 // 	// Parse query parameter "hash" to get the block hash
-// 	blockHash := r.URL.Query().Get("hash")
+// blockHash := r.URL.Query().Get("hash")
 
 // 	// Get the block with the specified block hash from the blockchain
 // 	block := getBlockByHash(blockHash) // You need to implement this function
@@ -160,7 +195,6 @@ func BlockNumberHandler(w http.ResponseWriter, r *http.Request) {
 // 	}
 
 // }
-
 
 // Handler function to handle /getNonce endpoint with query parameter "address"
 func GetNonceHandler(w http.ResponseWriter, r *http.Request) {
@@ -252,4 +286,63 @@ func GetKnownHostHandler(w http.ResponseWriter, r *http.Request) {
 	// }
 	// Send response
 	// fmt.Fprintf(w, "Address %s is known or unknown", address)
+}
+
+func CreateAccountHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse request parameters to get Nonce and Balance values
+	nonceStr := r.URL.Query().Get("nonce")
+	balanceStr := r.URL.Query().Get("balance")
+
+	// Convert Nonce and Balance values to uint64
+	nonce, err := strconv.ParseUint(nonceStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid nonce", http.StatusBadRequest)
+		return
+	}
+	balance, err := strconv.ParseUint(balanceStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid balance", http.StatusBadRequest)
+		return
+	}
+
+	// Generate private key and public address with provided Nonce and Balance
+	newAccount, err := GenerateAccount(nonce, balance)
+	if err != nil {
+		http.Error(w, "Failed to generate account", http.StatusInternalServerError)
+		return
+	}
+
+	// Add the newly created account to the database
+	err = database.AddAccountToDB(newAccount.Address, newAccount)
+	if err != nil {
+		http.Error(w, "Failed to add account to database", http.StatusInternalServerError)
+		return
+	}
+
+	// Serialize the account data into JSON
+	accountJSON, err := json.Marshal(newAccount)
+	if err != nil {
+		http.Error(w, "Failed to serialize account", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response with the account JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(accountJSON)
+}
+
+func GenerateAccount(nonce, balance uint64) (*account.Account, error) {
+	// Generate private key and public address with provided Nonce and Balance
+	privateKey := account.GeneratePrivAndPubKey()
+
+	// Convert public address to [20]byte format
+	addressBytes := common.HexToAddress(privateKey).Bytes()
+
+	// Create and return the Account struct with provided nonce, balance, and address
+	return &account.Account{
+		Address: common.BytesToAddress(addressBytes),
+		Nonce:   nonce,
+		Balance: balance,
+	}, nil
 }

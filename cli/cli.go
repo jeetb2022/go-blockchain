@@ -61,6 +61,8 @@ func convertToAddr(mineraddr string) (common.Address, error) {
 	return address, nil
 }
 
+var minerAddr common.Address
+
 func (cli *Client) Run() {
 
 	fmt.Println("Running the CLI command")
@@ -88,7 +90,7 @@ func (cli *Client) Run() {
 		// 	fmt.Println("Invalid address")
 		// 	return // Exit early if the address is invalid
 		// }
-
+		minerAddr = common.HexToAddress(*minerAddress)
 		// If the address is valid, execute network.Run(ctx)
 
 		done := Start(ctx)
@@ -102,7 +104,7 @@ func (cli *Client) Run() {
 		cancel()
 		<-done
 
-		network.Run(ctx)
+		network.Run(ctx, minerAddr)
 	default:
 		cli.printUsage()
 	}
@@ -112,7 +114,7 @@ func Start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		network.Run(ctx)
+		network.Run(ctx, minerAddr)
 	}()
 	return done
 }

@@ -15,39 +15,13 @@ type Account struct {
 	Balance uint64
 }
 
-func GenerateRandomHex(length int) (string, error) {
-	// Determine the number of bytes needed for the specified length of hex string
-	numBytes := length / 2
-	if length%2 != 0 {
-		numBytes++
-	}
-
-	// Generate random bytes
-	randomBytes := make([]byte, numBytes)
-	_, err := rand.Read(randomBytes)
-	if err != nil {
-		return "", err
-	}
-
-	// Convert random bytes to hexadecimal string
-	hexString := hex.EncodeToString(randomBytes)
-
-	// Truncate the string to the desired length
-	if len(hexString) > length {
-		hexString = hexString[:length]
-	}
-
-	return hexString, nil
-}
 
 func GeneratePrivAndPubKey() string {
-	privateHex := "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 	randomHex, err := GenerateRandomHex(64) // Generate a random hex string of length 32
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Random Hex:", randomHex)
-
+	// fmt.Println("Random Hex:", randomHex)
 	privateKey, err := crypto.HexToECDSA(randomHex)
 	if err != nil {
 		panic(err)
@@ -55,10 +29,40 @@ func GeneratePrivAndPubKey() string {
 
 	publicKey := crypto.PubkeyToAddress(privateKey.PublicKey)
 	address := publicKey.Hex()
+	os.Setenv("PRIVATE_KEY",randomHex)
+	
+	if err:=WritePrivateKeyToEnvFile(randomHex); err!=nil{
+		panic(err)
+	}
 	fmt.Println("Address:", address) // this is the user public address (which can be shared to anyone)
 
-	return privateHex
+	return address
 }
+
+
+func GenerateRandomHex(length int) (string, error) {
+	// Determine the number of bytes needed
+	byteLength := length / 2
+	if length%2 != 0 {
+		byteLength++
+	}
+
+	// Generate random bytes
+	bytes := make([]byte, byteLength)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert bytes to hexadecimal string
+	hexString := hex.EncodeToString(bytes)
+
+	// Truncate to desired length
+	hexString = hexString[:length]
+
+	return hexString, nil
+}
+
 
 func WritePrivateKeyToEnvFile(privateKey string) error {
 	envFile := ".env"

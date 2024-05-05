@@ -15,26 +15,43 @@ import (
 )
 
 type TransactionPool struct {
-	transactions []*transaction.SignedTransaction
-	newTxChan    chan *transaction.SignedTransaction
+	Transactions []*transaction.SignedTransaction
 }
 
+// NewTransactionPool creates a new transaction pool
 func NewTransactionPool() *TransactionPool {
 	return &TransactionPool{
-		transactions: make([]*transaction.SignedTransaction, 0),
-		newTxChan:    make(chan *transaction.SignedTransaction),
+		Transactions: make([]*transaction.SignedTransaction, 0),
 	}
 }
 
-func (tp *TransactionPool) AddTransactionToTxPool(tx *transaction.SignedTransaction) {
-	tp.transactions = append(tp.transactions, tx)
-	// Send the new transaction through the channel
+// AddTransaction adds a new transaction to the pool after validation
+func (tp *TransactionPool) AddTransactionToTxPool(tx *transaction.SignedTransaction) error {
+	// Basic validation
+	// if tx == nil {
+	// 	return errors.New("transaction is nil")
+	// }
+	// if tx.To == (common.Address{}) {
+	// 	return errors.New("invalid recipient address")
+	// }
+	// if tx.Value == 0 {
+	// 	return errors.New("invalid transaction value")
+	// }
+	// if tx.Nonce == 0 {
+	// 	return errors.New("invalid transaction nonce")
+	// }
+	// if tx.V == nil || tx.R == nil || tx.S == nil {
+	// 	return errors.New("signature components missing")
+	// }
+	// Add to pool
+	tp.Transactions = append(tp.Transactions, tx)
+	return nil
 }
 
 // PrintAllTransactions prints all transactions in the pool
 func (tp *TransactionPool) GetAllTransactions() {
 	fmt.Println("Transactions in the pool:")
-	for _, tx := range tp.transactions {
+	for _, tx := range tp.Transactions {
 		fmt.Printf("To: %s\n", tx.To.Hex())
 		fmt.Printf("Value: %d\n", tx.Value)
 		fmt.Printf("Nonce: %d\n", tx.Nonce)

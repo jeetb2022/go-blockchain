@@ -4,6 +4,7 @@ import (
 	"Blockchain_Project/blockchain"
 	"Blockchain_Project/database"
 	"Blockchain_Project/transaction"
+	"Blockchain_Project/txpool"
 	"Blockchain_Project/utils"
 	"errors"
 	"fmt"
@@ -16,6 +17,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var tp *txpool.TransactionPool
+
+func GetTxPool(p *txpool.TransactionPool) {
+	tp = p
+}
 func ValidateAddress(address [20]byte) (bool, error) {
 	_, err := database.GetAccountFromDB(address)
 
@@ -27,6 +33,33 @@ func ValidateAddress(address [20]byte) (bool, error) {
 		fmt.Println("Valid account address")
 		return true, nil
 	}
+}
+func CalculateTransactionsRoot(block *blockchain.Block) common.Hash {
+	var txHashes []common.Hash
+	for _, tx := range block.Transactions {
+		txHash := rlpHash(tx)
+		txHashes = append(txHashes, txHash)
+	}
+
+	transactionsRoot := HashList(txHashes)
+	return transactionsRoot
+}
+
+func HashList(hashes []common.Hash) common.Hash {
+	for len(hashes) > 1 {
+		var newHashes []common.Hash
+		for i := 0; i < len(hashes); i += 2 {
+			if i+1 < len(hashes) {
+				combinedHash := append(hashes[i][:], hashes[i+1][:]...)
+				newHash := common.BytesToHash(combinedHash)
+				newHashes = append(newHashes, newHash)
+			} else {
+				newHashes = append(newHashes, hashes[i])
+			}
+		}
+		hashes = newHashes
+	}
+	return hashes[0]
 }
 
 func ValidateBlock(block *blockchain.Block) (bool, error) {
@@ -43,16 +76,16 @@ func ValidateBlock(block *blockchain.Block) (bool, error) {
 		return false, errors.New("block's parent hash does not match the last block's hash")
 	}
 
-	if block.Header.Miner != blockchain.SignHeader(block.Header) {
-		return false, errors.New("block's miner address is not the address that signed the block")
-	}
+	// if block.Header.Miner != bloc {
+	// 	return false, errors.New("block's miner address is not the address that signed the block")
+	// }
 
 	stateRoot := utils.StateRoot()
 	if block.Header.StateRoot != stateRoot {
 		return false, errors.New("block's state root does not match the root of the state trie")
 	}
 
-	transactionsRoot := utils.CalculateTransactionsRoot(block)
+	transactionsRoot := CalculateTransactionsRoot(block)
 	if block.Header.TransactionsRoot != transactionsRoot {
 		return false, errors.New("block's transactions root does not match the root of the transactions trie")
 	}
@@ -64,7 +97,6 @@ func ValidateBlock(block *blockchain.Block) (bool, error) {
 
 	return true, nil
 }
-
 func rlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
@@ -127,6 +159,7 @@ func ValidateTransaction(trans *transaction.SignedTransaction) bool {
 		return false
 	}
 	// Check if the sender's account exists in the database
+	fmt.Println(sender)
 	senderAccount, err := database.GetAccountFromDB(sender)
 	if err != nil {
 		fmt.Println("Error retrieving sender's account from database:", err)
@@ -151,3 +184,71 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
 	return r, s, v
 }
+
+// func GetMinedBlock() *blockchain.Block {
+// 	// Create a new block
+
+// 	block := &blockchain.Block{
+// 		Transactions: make([]*transaction.SignedTransaction, 0),
+// 	}
+
+// 	// Maximum number of transactions to add to the block
+// 	maxTransactions := 10
+// 	var pickedTransactions []transaction.SignedTransaction
+// 	// Iterate through transactions in the transaction pool
+// 	for i := 0; i < len(tp.Transactions) && i < maxTransactions; i++ {
+// 		if len(tp.Transactions) <= 0 {
+// 			break
+// 		}
+// 		tx := tp.Transactions[i]
+
+// 		// Validate the transaction
+// 		// if ValidateTransaction(tx) {
+// 		// 	txToAppend := &transaction.SignedTransaction{
+// 		// 		To:    tx.To,
+// 		// 		Value: tx.Value,
+// 		// 		Nonce: tx.Nonce,
+// 		// 		V:     tx.V,
+// 		// 		R:     tx.R,
+// 		// 		S:     tx.S,
+// 		// 	}
+
+// 		// Add the transaction to the block
+// 		block.Transactions = append(block.Transactions, tx)
+// 		pickedTransactions := append(pickedTransactions, *tx)
+// 		pickedTransactions = pickedTransactions
+
+// 		// Remove the transaction from the pool
+// 		tp.Transactions = append(tp.Transactions[:i], tp.Transactions[i+1:]...)
+
+// 		// Update the index to handle the removed transaction
+// 		i--
+
+// 	}
+
+// 	stateRoot := utils.StateRoot()
+// 	transactionRoot := utils.CalculateTransactionsRoot(pickedTransactions)
+// 	parentHash, err := database.GetLastBlockHash()
+// 	parentHashBytes := database.RlpHash(parentHash)
+// 	currentHeight, err := database.GetCurrentHeight()
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	timestamp := time.Now().Unix()
+// 	minerAddr := network.GetMinerAddr()
+// 	blockHeader := &blockchain.Header{
+// 		ParentHash:       parentHashBytes,
+// 		Miner:            minerAddr,
+// 		StateRoot:        stateRoot,
+// 		TransactionsRoot: transactionRoot,
+// 		Number:           currentHeight,
+// 		Timestamp:        uint64(timestamp),
+// 	}
+// 	extradata := blockchain.SignHeader(blockHeader)
+// 	blockHeader.ExtraData = extradata[:]
+// 	block.Header = blockHeader
+// 	return block
+// }

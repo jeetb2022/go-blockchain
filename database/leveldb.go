@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	// "errors"
-	"Blockchain_Project/blockchain"
+
 	"fmt"
 	"log"
 	"strconv"
@@ -19,6 +19,21 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/crypto/sha3"
 )
+
+type Block struct {
+	Header       *Header
+	Transactions []*transaction.SignedTransaction
+}
+
+type Header struct {
+	ParentHash       common.Hash
+	Miner            common.Address
+	StateRoot        common.Hash
+	TransactionsRoot common.Hash
+	Number           uint64
+	Timestamp        uint64
+	ExtraData        []byte
+}
 
 var (
 	blockDB       *leveldb.DB
@@ -54,7 +69,7 @@ func init() {
 	}
 }
 
-func SerializeBlock(block *blockchain.Block) ([]byte, error) {
+func SerializeBlock(block *Block) ([]byte, error) {
 	encodedBlock, err := rlp.EncodeToBytes(block)
 	if err != nil {
 		return nil, err
@@ -62,8 +77,8 @@ func SerializeBlock(block *blockchain.Block) ([]byte, error) {
 	return encodedBlock, nil
 }
 
-func DeserializeBlock(encodedBlock []byte) (*blockchain.Block, error) {
-	var block blockchain.Block
+func DeserializeBlock(encodedBlock []byte) (*Block, error) {
+	var block Block
 	err := rlp.DecodeBytes(encodedBlock, &block)
 	if err != nil {
 		return nil, err
@@ -87,7 +102,7 @@ var hasherPool = sync.Pool{
 
 // ------------------------ Functions related to blockDB (Cluster 0) ------------------------
 
-func AddBlockData(block *blockchain.Block) error {
+func AddBlockData(block *Block) error {
 	blockHash := RlpHash(block)
 
 	serializedBlock, err := SerializeBlock(block)
@@ -103,7 +118,7 @@ func AddBlockData(block *blockchain.Block) error {
 	return nil
 }
 
-func GetBlockByHash(hash []byte) (*blockchain.Block, error) {
+func GetBlockByHash(hash []byte) (*Block, error) {
 	data, err := blockDB.Get(hash, nil)
 	if err != nil {
 		return nil, err
@@ -133,7 +148,7 @@ func PrintAllDataFromBlockDB() error {
 
 // ------------------------ Functions related to blockDBNumber (Cluster 1) ------------------------
 
-func StoreBlockHash(blockNumber uint64, block *blockchain.Block) error {
+func StoreBlockHash(blockNumber uint64, block *Block) error {
 	// Calculate the hash of the block
 	blockHash := RlpHash(block)
 
@@ -168,7 +183,7 @@ func GetCurrentHeight() (uint64, error) {
 	return height, nil
 }
 
-func GetLastBlockHash() (*blockchain.Block, error) {
+func GetLastBlockHash() (*Block, error) {
 	// Get the current height
 	height, err := GetCurrentHeight()
 	if err != nil {
@@ -178,7 +193,7 @@ func GetLastBlockHash() (*blockchain.Block, error) {
 	return RetrieveBlockHash(height)
 }
 
-func RetrieveBlockHash(blockNumber uint64) (*blockchain.Block, error) {
+func RetrieveBlockHash(blockNumber uint64) (*Block, error) {
 	// Convert the block number to a string
 	blockNumberStr := strconv.FormatUint(blockNumber, 10)
 
