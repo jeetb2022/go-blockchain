@@ -49,8 +49,8 @@ func main() {
 		http.HandleFunc("/getBalance", api.GetBalanceHandler)
 
 		// Start the HTTP server
-		fmt.Println("Server is running on port 8001")
-		if err := http.ListenAndServe(":8001", nil); err != nil {
+		fmt.Println("Server is running on port 8003")
+		if err := http.ListenAndServe(":8003", nil); err != nil {
 			fmt.Printf("Failed to start HTTP server: %v\n", err)
 		}
 	}()

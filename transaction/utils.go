@@ -82,12 +82,12 @@ var hasherPool = sync.Pool{
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
 	if Vb.BitLen() > 8 {
 		// return common.Address{}, ErrInvalidSig
-		panic("invalid signature")
+		panic("invalid signature @utils")
 	}
 	V := byte(Vb.Uint64() - 27)
 	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
 		// return common.Address{}, ErrInvalidSig
-		panic("invalid signature")
+		panic("invalid signature " )
 	}
 	// encode the signature in uncompressed format
 	r, s := R.Bytes(), S.Bytes()
@@ -106,4 +106,22 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
 	return addr, nil
+}
+
+func SerializeTransaction(msg SignedTransaction) ([]byte, error) {
+	// Encode the message struct
+	encodedMsg, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return nil, err
+	}
+	return encodedMsg, nil
+}
+func DeserializeTransaction(msg []byte) (SignedTransaction, error) {
+	// Decode the message struct
+	var transaction SignedTransaction
+	err := rlp.DecodeBytes(msg, &transaction)
+	if err != nil {
+		panic(err)
+	}
+	return transaction, nil
 }

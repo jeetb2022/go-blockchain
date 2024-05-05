@@ -3,6 +3,7 @@ package network
 import (
 	"Blockchain_Project/blockchain"
 	"Blockchain_Project/database"
+	"Blockchain_Project/transaction"
 	"context"
 	"fmt"
 	"io"
@@ -30,6 +31,7 @@ var peerIdList []string
 var peerAddrList []string
 var ctxt context.Context
 var hostPeerAddr string
+var globalHost host.Host
 
 type Message struct {
 	ID   uint64 `json:"id"`
@@ -187,6 +189,7 @@ func Run(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+	globalHost = host
 
 	GetMultiAddr()
 	ConnectToPeers(host)
@@ -200,6 +203,14 @@ func Run(ctx context.Context) {
 		fmt.Println(string(msg.Data))
 		if msg.Want == uint(1) {
 			SendPONG(ctx, host, s.Conn().RemotePeer())
+		}
+		if msg.Code == uint(4) {
+			RecvedTransaction, err := transaction.DeserializeTransaction(msg.Data)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("This is from the peer", RecvedTransaction)
+
 		}
 
 	})
@@ -335,6 +346,37 @@ func SendBlock(ctx context.Context, host host.Host, peerID peer.ID, blocks []blo
 	}
 	sendMessageWithCTX(ctx, host, peerID, msgBlock)
 	return nil
+}
+
+func SendTransaction(signedTransaction transaction.SignedTransaction) {
+	fmt.Println(signedTransaction)
+	encodedTransaction, err := transaction.SerializeTransaction(signedTransaction)
+
+	if err != nil {
+		panic(err)
+	}
+	msgTransaction := Message{
+		ID:   rand.Uint64(),
+		Code: uint(4),
+		Want: uint(542),
+		Data: encodedTransaction,
+	}
+
+	for _, addr := range peerAddrList {
+		if addr != "" {
+
+			peerMA, err := multiaddr.NewMultiaddr(addr)
+			if err != nil {
+				panic(err)
+			}
+			peerAddrInfo, err := peer.AddrInfoFromP2pAddr(peerMA)
+			if err != nil {
+				panic(err)
+			}
+			sendMessageWithCTX(ctxt, globalHost, peerAddrInfo.ID, msgTransaction)
+		}
+	}
+
 }
 
 func SendGetLatestBlock(ctx context.Context, host host.Host, peerID peer.ID) {

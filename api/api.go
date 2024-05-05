@@ -7,6 +7,7 @@ import (
 	"Blockchain_Project/txpool"
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	math_rand "math/rand"
@@ -41,10 +42,13 @@ func SendTxHandler(w http.ResponseWriter, r *http.Request) {
 		R:     big.NewInt(int64(math_rand.Intn(1000))),
 		S:     big.NewInt(int64(math_rand.Intn(1000))),
 	}
-	if !transaction.VerifyTx(tx) {
-		http.Error(w, "Transaction verification failed", http.StatusBadRequest)
-	}
+	// if !validation.ValidateTransaction(&tx) {
+	// 	http.Error(w, "Transaction verification failed", http.StatusBadRequest)
+	// }
+	fmt.Println("This is lassssststtttttttttt")
 	tp.AddTransactionToTxPool(&tx)
+
+	network.SendTransaction(tx)
 	// tp.GetAllTransactions()
 	w.WriteHeader(http.StatusOK)
 	message := "Transaction added scessfully"
@@ -55,6 +59,51 @@ func SendTxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+// func SendTxHandler(w http.ResponseWriter, r *http.Request) {
+// 	// Create a new signed transaction
+// 	tx := transaction.SignedTransaction{
+// 		Nonce: 43,
+// 		To:    GenerateRandomAddress(),
+// 		Value: 1000,
+// 		V:     big.NewInt(int64(math_rand.Intn(1000))),
+// 		R:     big.NewInt(int64(math_rand.Intn(1000))),
+// 		S:     big.NewInt(int64(math_rand.Intn(1000))),
+// 	}
+
+// 	// Validate the transaction
+// 	// if !validation.ValidateTransaction(&tx) {
+// 	// 	http.Error(w, "Transaction verification failed", http.StatusBadRequest)
+// 	// 	return
+// 	// }
+
+// 	// Add the transaction to the transaction pool
+// 	tp.AddTransactionToTxPool(&tx)
+// 	type TransactionResponse struct {
+// 		Nonce uint64 `json:"nonce"`
+// 		To    string `json:"to"`
+// 		Value uint64 `json:"value"`
+// 		V     int64  `json:"v"`
+// 		R     int64  `json:"r"`
+// 		S     int64  `json:"s"`
+// 	}
+// 	// Serialize the transaction data into a response struct
+// 	resp := TransactionResponse{
+// 		Nonce: tx.Nonce,
+// 		To:    tx.To.String(),
+// 		Value: tx.Value,
+// 		V:     tx.V.Int64(),
+// 		R:     tx.R.Int64(),
+// 		S:     tx.S.Int64(),
+// 	}
+
+// 	// Encode the response object as JSON
+// 	w.Header().Set("Content-Type", "application/json") // Set content type to JSON
+// 	if err := json.NewEncoder(w).Encode(resp); err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+// }
 
 // Handler function to handle /blockNumber endpoint
 func BlockNumberHandler(w http.ResponseWriter, r *http.Request) {
@@ -150,17 +199,28 @@ func GetBalanceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the balance from the retrieved account
-	balance := account.Balance
+	type BalanceResponse struct {
+		Address string `json:"address"`
+		Balance uint64 `json:"balance"`
+	}
 
-	// Send response with the balance
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Balance of account %s: %d", addressString, balance)
+	// Create a response struct
+	resp := BalanceResponse{
+		Address: addressString,
+		Balance: account.Balance,
+	}
+
+	// Encode the response object as JSON
+	w.Header().Set("Content-Type", "application/json") // Set content type to JSON
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // Handler function to handle /getknownhost endpoint
 func GetKnownHostHandler(w http.ResponseWriter, r *http.Request) {
-	
+
 	// Parse query parameter "address" to get the account address
 	addrList := network.GetPeerAddrs()
 	var buf bytes.Buffer

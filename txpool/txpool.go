@@ -29,7 +29,6 @@ func NewTransactionPool() *TransactionPool {
 func (tp *TransactionPool) AddTransactionToTxPool(tx *transaction.SignedTransaction) {
 	tp.transactions = append(tp.transactions, tx)
 	// Send the new transaction through the channel
-	tp.newTxChan <- tx
 }
 
 // PrintAllTransactions prints all transactions in the pool
