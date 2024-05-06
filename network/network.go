@@ -262,11 +262,14 @@ func Run(ctx context.Context, minerAddr common.Address) {
 		// 	// fmt.Println(addr)
 		// }
 		peerAddrList = addresses
-		time.Sleep(time.Second * 5)
+		// time.Sleep(time.Second * 5)
 		if true {
-			err := SendNewBlock()
-			if err != nil {
-				panic(err)
+			if len(tp.Transactions) > 5 {
+
+				err := SendNewBlock()
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 

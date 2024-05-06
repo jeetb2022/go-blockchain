@@ -57,10 +57,10 @@ func SendTxHandler(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	// Decode the request body into the SignedTransaction struct
-	if !validation.ValidateTransaction(&tx) {
-		http.Error(w, "Transaction verification failed", http.StatusBadRequest)
-		return
-	}
+	// if !validation.ValidateTransaction(&tx) {
+	// 	http.Error(w, "Transaction verification failed", http.StatusBadRequest)
+	// 	return
+	// }
 	// Add the transaction to the transaction pool
 	tp.AddTransactionToTxPool(&tx)
 

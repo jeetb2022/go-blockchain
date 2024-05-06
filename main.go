@@ -5,7 +5,6 @@ import (
 	"Blockchain_Project/cli"
 	"Blockchain_Project/database"
 	"Blockchain_Project/network"
-	"Blockchain_Project/transaction"
 	"Blockchain_Project/txpool"
 	"Blockchain_Project/validation"
 	"crypto/rand"
@@ -15,7 +14,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/joho/godotenv"
 )
 
@@ -48,10 +46,7 @@ func main() {
 	// 	tp.AddTransactionToTxPool(&signedTx)
 	// 	// transactions[i] = transaction
 	// }
-	// api.GetTxPool(tp)
-
-
-
+	api.GetTxPool(tp)
 
 	// database.PrintAllAccountData()
 	network.GetTxPool(tp)
@@ -89,8 +84,8 @@ func main() {
 		http.HandleFunc("/block", api.GetBlockByHashHandler)
 
 		// Start the HTTP server
-		fmt.Println("Server is running on port 8005")
-		if err := http.ListenAndServe(":8005", nil); err != nil {
+		fmt.Println("Server is running on port 8007")
+		if err := http.ListenAndServe(":8007", nil); err != nil {
 			fmt.Printf("Failed to start HTTP server: %v\n", err)
 		}
 	}()
