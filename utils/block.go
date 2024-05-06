@@ -45,6 +45,10 @@ func StateRoot() common.Hash {
 }
 
 func HashList(hashes []common.Hash) common.Hash {
+	if len(hashes) == 0 {
+		return common.Hash{} // or whatever default hash value you want to return
+	}
+
 	for len(hashes) > 1 {
 		var newHashes []common.Hash
 		for i := 0; i < len(hashes); i += 2 {

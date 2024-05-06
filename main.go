@@ -3,6 +3,7 @@ package main
 import (
 	"Blockchain_Project/api"
 	"Blockchain_Project/cli"
+	"Blockchain_Project/database"
 	"Blockchain_Project/network"
 	"Blockchain_Project/transaction"
 	"Blockchain_Project/txpool"
@@ -26,26 +27,35 @@ func randomBigInt() *big.Int {
 	return new(big.Int).SetBytes(numBytes[:])
 }
 func main() {
-	// Load environment variables
+	err := database.PrintAllDataFromBlockDB()
+	if err != nil {
+		panic(err)
+	} // Load environment variables
 	godotenv.Load()
 	defer os.Exit(0)
 	validation.GetTxPool(tp)
 	// Create a new instance of the CLI client
 
 	cmd := cli.Client{}
-	for i := 0; i < 100; i++ {
-		transaction := transaction.Transaction{
-			To:    common.HexToAddress("0x1234567890123456789012345678901234567890"),
-			Value: 1000,
-			Nonce: 1,
-		}
-		signedTx := api.SignTxn(transaction)
+	// for i := 0; i < 100; i++ {
+	// 	transaction := transaction.Transaction{
+	// 		To:    common.HexToAddress("0x1234567890123456789012345678901234567890"),
+	// 		Value: 1000,
+	// 		Nonce: 1,
+	// 	}
+	// 	signedTx := api.SignTxnNew(transaction)
 
-		tp.AddTransactionToTxPool(&signedTx)
-		// transactions[i] = transaction
-	}
-	api.GetTxPool(tp)
+	// 	tp.AddTransactionToTxPool(&signedTx)
+	// 	// transactions[i] = transaction
+	// }
+	// api.GetTxPool(tp)
+
+
+
+
+	// database.PrintAllAccountData()
 	network.GetTxPool(tp)
+	api.SignTxn()
 
 	TimerWithCallback := func() {
 		// tp.GetAllTransactions()
@@ -75,6 +85,8 @@ func main() {
 		http.HandleFunc("/getBalance", api.GetBalanceHandler)
 		http.HandleFunc("/getKnownHosts", api.GetKnownHostHandler)
 		http.HandleFunc("/addAddress", api.CreateAccountHandler)
+		http.HandleFunc("/createGenesis", api.GenesisBlockHandler)
+		http.HandleFunc("/block", api.GetBlockByHashHandler)
 
 		// Start the HTTP server
 		fmt.Println("Server is running on port 8005")

@@ -22,16 +22,16 @@ var tp *txpool.TransactionPool
 func GetTxPool(p *txpool.TransactionPool) {
 	tp = p
 }
-func ValidateAddress(address [20]byte) (bool, error) {
+func ValidateAddress(address [20]byte) (bool) {
 	_, err := database.GetAccountFromDB(address)
 
 	if err != nil {
 
 		fmt.Println("Invalid account address")
-		return false, err
+		return false
 	} else {
 		fmt.Println("Valid account address")
-		return true, nil
+		return true
 	}
 }
 func CalculateTransactionsRoot(block *blockchain.Block) common.Hash {

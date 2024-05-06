@@ -36,7 +36,7 @@ var ctxt context.Context
 var hostPeerAddr string
 var globalHost host.Host
 var localLatestBlock uint64
-var minerAddr common.Address
+var minerAdderss common.Address
 
 var tp *txpool.TransactionPool
 
@@ -115,7 +115,8 @@ func StartNewNode() (host.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("the public key is %v \n ", pub)
+	pub = pub
+	// fmt.Printf("the public key is %v \n ", pub)
 
 	host2, err := libp2p.New(libp2p.Identity(priv), libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 
@@ -192,7 +193,7 @@ func GetMultiAddr() { // []multiaddr.Multiaddr,[]peer.AddrInfo
 
 func Run(ctx context.Context, minerAddr common.Address) {
 	ctxt = ctx
-	minerAddr = minerAddr
+	minerAdderss = minerAddr
 	locallatestblock, err := database.GetCurrentHeight()
 	if err != nil {
 		panic(err)
@@ -231,8 +232,9 @@ func Run(ctx context.Context, minerAddr common.Address) {
 			// 	panic(err)
 			// }
 
-			fmt.Println("This blockchain is from the peer", msg.Data)
+			// fmt.Println("This blockchain is from the peer", msg.Data)
 		}
+		s.Close()
 
 	})
 
@@ -254,11 +256,11 @@ func Run(ctx context.Context, minerAddr common.Address) {
 			// Add the peer addresses to the list
 			addresses = append(addresses, remoteAddrWithPeerID)
 		}
-		fmt.Println("List of peer addresses:")
+		// fmt.Println("List of peer addresses:")
 		addresses = append(addresses, hostPeerAddr)
-		for _, addr := range addresses {
-			fmt.Println(addr)
-		}
+		// for _, addr := range addresses {
+		// 	// fmt.Println(addr)
+		// }
 		peerAddrList = addresses
 		time.Sleep(time.Second * 5)
 		if true {
@@ -325,7 +327,7 @@ func SendPONG(ctx context.Context, host host.Host, peerID peer.ID) {
 
 func SendNewBlock() error {
 
-	minedBlock := CreateBlocks(minerAddr)
+	minedBlock := CreateBlocks(minerAdderss)
 
 	// fmt.Println("Mined block: ", minedBlock)
 
@@ -468,7 +470,7 @@ func GetTxPool(p *txpool.TransactionPool) {
 	tp = p
 }
 func GetMinerAddr() common.Address {
-	return minerAddr
+	return minerAdderss
 }
 
 // func GetMinedBlock() *blockchain.Block {
@@ -552,7 +554,7 @@ func CreateBlocks(miner common.Address) blockchain.Block {
 		// Append each transaction to the signedTransactions slice
 		signedTransactions = append(signedTransactions, *tx)
 	}
-
+	// fmt.Println("Signed Transaction", signedTransactions)
 	// Create the block header
 	stateRoot := utils.StateRoot()
 	transactionRoot := utils.CalculateTransactionsRoot(signedTransactions)
@@ -566,7 +568,7 @@ func CreateBlocks(miner common.Address) blockchain.Block {
 	// 	panic(err)
 	// }
 	timestamp := time.Now().Unix()
-	minerAddr := minerAddr
+	minerAddr := minerAdderss
 	blockHeader := &blockchain.Header{
 		ParentHash:       parentHashBytes,
 		Miner:            minerAddr,
@@ -583,7 +585,12 @@ func CreateBlocks(miner common.Address) blockchain.Block {
 		Transactions: transactions,
 	}
 
-	fmt.Println("Created block with transactions:", block)
+	// fmt.Println("Mineer:", minerAdderss)
+	// fmt.Println("Header ParentHash:", block.Header.ParentHash)
+	// fmt.Println("Header Miner:", block.Header.Miner)
+	// fmt.Println("Header StateRoot:", block.Header.StateRoot)
+	// fmt.Println("Header StateRoot:", block.Transactions[0])
+	// Print other fields similarly
 	// }
 	return block
 }

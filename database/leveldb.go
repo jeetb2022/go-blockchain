@@ -2,9 +2,13 @@ package database
 
 import (
 	"Blockchain_Project/account"
+	"Blockchain_Project/blockchain"
 	"Blockchain_Project/transaction"
+	"crypto/rand"
 	"encoding/binary"
+	"math/big"
 	"sync"
+	"time"
 
 	// "errors"
 
@@ -102,15 +106,36 @@ var hasherPool = sync.Pool{
 
 // ------------------------ Functions related to blockDB (Cluster 0) ------------------------
 
-func AddBlockData(block *Block) error {
-	blockHash := RlpHash(block)
+// func AddBlockData(block *Block) error {
+// 	fmt.Println("block", block)
+// 	blockHash := RlpHash(block)
+// 	fmt.Println("blockhash", blockHash)
+// 	encodedBlockHash, err := rlp.EncodeToBytes(blockHash)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	serializedBlock, err := SerializeBlock(block)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Println("add block", blockHash[:])
+// 	err = blockDB.Put(encodedBlockHash, serializedBlock, nil)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	serializedBlock, err := SerializeBlock(block)
+// 	return nil
+// }
+
+func AddBlockData(key common.Hash, value []byte) error {
+	// Convert the key to bytes
+	bytesKey, err := rlp.EncodeToBytes(key)
 	if err != nil {
 		return err
 	}
 
-	err = blockDB.Put(blockHash[:], serializedBlock, nil)
+	// Write the key-value pair to the database
+	err = blockDB.Put(bytesKey, value, nil)
 	if err != nil {
 		return err
 	}
@@ -119,7 +144,9 @@ func AddBlockData(block *Block) error {
 }
 
 func GetBlockByHash(hash []byte) (*Block, error) {
+	// fmt.Println("hashbyte", hash)
 	data, err := blockDB.Get(hash, nil)
+	// fmt.Println(data)
 	if err != nil {
 		return nil, err
 	}
@@ -154,9 +181,16 @@ func StoreBlockHash(blockNumber uint64, block *Block) error {
 
 	// Convert the block number to a string
 	blockNumberStr := strconv.FormatUint(blockNumber, 10)
-
+	encodedBlockHash, err := rlp.EncodeToBytes(blockHash)
+	if err != nil {
+		panic(err)
+	}
 	// Store the block hash in the database
-	err := blockDBNumber.Put([]byte(blockNumberStr), blockHash[:], nil)
+	if err := blockDBNumber.Put([]byte(blockNumberStr), encodedBlockHash, nil); err != nil {
+		panic(err)
+	}
+	fmt.Println("blockhash", blockHash[:])
+	fmt.Println("blocknum", []byte(blockNumberStr))
 	if err != nil {
 		return err
 	}
@@ -170,14 +204,20 @@ func GetCurrentHeight() (uint64, error) {
 
 	height := uint64(0)
 	for iter.Next() {
-		key := binary.BigEndian.Uint64(iter.Key())
-		if int(key) > int(height) {
-			height = uint64(key)
+		key := iter.Key()
+		if len(key) >= 8 { // Ensure key length is at least 8 bytes
+			keyUint64 := binary.BigEndian.Uint64(key[:8]) // Extract first 8 bytes
+			if keyUint64 > height {
+				height = keyUint64
+			}
+		} else {
+			// Handle keys shorter than 8 bytes
+			// You might want to log this as it could indicate a problem with your data
 		}
 	}
 
 	if err := iter.Error(); err != nil {
-		return uint64(0), fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
+		return 0, fmt.Errorf("error occurred while iterating over LevelDB: %v", err)
 	}
 
 	return height, nil
@@ -209,6 +249,7 @@ func RetrieveBlockHash(blockNumber uint64) (*Block, error) {
 }
 
 func PrintAllDataFromBlockDBNumber() error {
+	// fmt.Println("Hello")
 	iter := blockDBNumber.NewIterator(util.BytesPrefix(nil), nil)
 	defer iter.Release()
 
@@ -247,6 +288,39 @@ func GetStateRoot() []common.Hash {
 	}
 
 	return balanceHashes
+}
+
+func IncreaseAccountBalance(address [20]byte, expense uint64) error {
+	account, err := GetAccountFromDB(address)
+	if err != nil {
+		return err
+	}
+
+	account.Balance = account.Balance + expense
+	return AddAccountToDB(address, account)
+}
+func AddNewAccountToDB(address [20]byte) error {
+	max := new(big.Int).Lsh(big.NewInt(1), 64)
+	nonce, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return fmt.Errorf("error generating random nonce: %v", err)
+	}
+	newAccount := account.Account{
+		Address: address,
+		Nonce:   nonce.Uint64(),
+		Balance: 1000,
+	}
+	return AddAccountToDB(address, &newAccount)
+}
+
+func DecreaseAccountBalance(address [20]byte, expense uint64) error {
+	account, err := GetAccountFromDB(address)
+	if err != nil {
+		return err
+	}
+
+	account.Balance = account.Balance - expense
+	return AddAccountToDB(address, account)
 }
 
 func AddAccountToDB(address [20]byte, account *account.Account) error {
@@ -424,6 +498,35 @@ func PrintAllData() error {
 	}
 
 	return nil
+}
+
+func GenesisBlock() {
+	// Create the genesis block
+	genesisBlock := &Block{}
+	genesisBlock.Header = &Header{
+		ParentHash:       common.Hash{},
+		Miner:            common.Address{},
+		StateRoot:        common.Hash{},
+		TransactionsRoot: common.Hash{},
+		Number:           uint64(0),
+		Timestamp:        uint64(time.Now().Unix()),
+		ExtraData:        []byte{},
+	}
+	genesisBlock.Transactions = []*transaction.SignedTransaction{}
+	genesisBlock.Header.ExtraData = blockchain.SignHeader(blockchain.Header(*genesisBlock.Header))
+	// Store the genesis block in the database
+	hash := RlpHash(genesisBlock)
+	hash = hash
+	value, err := SerializeBlock(genesisBlock)
+	if err := AddBlockData(hash, value); err != nil {
+		panic(err)
+	}
+
+	// Store the genesis block hash in the database
+	err = StoreBlockHash(uint64(0), genesisBlock)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func Close() {

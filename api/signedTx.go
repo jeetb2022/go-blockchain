@@ -2,8 +2,9 @@ package api
 
 import (
 	"Blockchain_Project/transaction"
+	"encoding/hex"
 	"fmt"
-	
+
 	"math/big"
 	"os"
 	"sync"
@@ -27,9 +28,50 @@ import (
 // 	V, R, S *big.Int // signature values
 // }
 
-func SignTxn(tx transaction.Transaction) transaction.SignedTransaction {
+func SignTxn() {
 	// Sign transaction
+	tx := transaction.Transaction{
+		To:    common.HexToAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"),
+		Nonce: 12,
+		Value: 50,
+	}
+	// hash of txn
+	h := Hash(&tx)
+	privatekey, err := crypto.HexToECDSA(os.Getenv("PRIVATE_KEY"))
+	if err != nil {
+		panic(err)
+	}
 
+	sig, err := crypto.Sign(h[:], privatekey)
+	if err != nil {
+		panic(err)
+	}
+
+	R, S, V := decodeSignature(sig)
+	signedTx := transaction.SignedTransaction{
+		To:    tx.To,
+		Value: tx.Value,
+		Nonce: tx.Nonce,
+		V:     V,
+		R:     R,
+		S:     S,
+	}
+	encodedSignedTxn, err := rlp.EncodeToBytes(signedTx)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(hex.EncodeToString(encodedSignedTxn))
+	// return signedTx
+}
+
+func SignTxnNew(txn transaction.Transaction) transaction.SignedTransaction {
+	// Sign transaction
+	tx := transaction.Transaction{
+		To:    common.HexToAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"),
+		Nonce: 12,
+		Value: 50,
+	}
 	// hash of txn
 	h := Hash(&tx)
 	privatekey, err := crypto.HexToECDSA(os.Getenv("PRIVATE_KEY"))
@@ -56,8 +98,7 @@ func SignTxn(tx transaction.Transaction) transaction.SignedTransaction {
 	// 	panic(err)
 	// }
 
-	// fmt.Println(hex.EncodeToString(encodedSignedTxn))
-
+	fmt.Println(signedTx)
 	return signedTx
 }
 

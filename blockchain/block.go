@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"Blockchain_Project/transaction"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -66,7 +65,7 @@ func SignHeader(h Header) []byte {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Signed Bytes: ", signedBytes, "Length: ", len(signedBytes))
+	// fmt.Println("Signed Bytes: ", signedBytes, "Length: ", len(signedBytes))
 	return signedBytes
 }
 
